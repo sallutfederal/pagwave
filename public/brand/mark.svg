@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="pagwave">
+  <title>pagwave</title>
+  <defs>
+    <linearGradient id="mark-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16213a" />
+      <stop offset="1" stop-color="#05080f" />
+    </linearGradient>
+    <linearGradient id="mark-edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4c8dff" stop-opacity="0.55" />
+      <stop offset="0.55" stop-color="#4c8dff" stop-opacity="0.08" />
+      <stop offset="1" stop-color="#4c8dff" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="mark-n" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset="1" stop-color="#9cc0ff" />
+    </linearGradient>
+    <linearGradient id="mark-sheen" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.12" />
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="16" fill="url(#mark-bg)" />
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#mark-sheen)" />
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="url(#mark-edge)" stroke-width="2" />
+
+  <g fill="url(#mark-n)">
+    <rect x="16" y="15" width="9" height="34" rx="2.5" />
+    <rect x="39" y="15" width="9" height="34" rx="2.5" />
+    <rect x="27" y="8" width="10" height="48" rx="2.5" transform="rotate(-19 32 32)" />
+  </g>
+</svg>
