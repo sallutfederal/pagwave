@@ -1,19 +1,19 @@
-﻿import type { Metadata } from "next";
-import { CreditCard } from "lucide-react";
+﻿import type { Metadata } from 'next';
+import { CreditCard } from 'lucide-react';
 
-import { CardLimits } from "@/components/cards/card-limits";
-import { CardRequestDialog } from "@/components/cards/card-request-dialog";
-import { UserCards } from "@/components/cards/user-cards";
-import { BankCardTile } from "@/components/dashboard/bank-card";
-import { PageHeader } from "@/components/layout/page-header";
-import { SectionHeader } from "@/components/dashboard/section-header";
-import { TransactionListItem } from "@/components/shared/transaction-list";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { getCardSettings, getDashboardSummary, getTransactions } from "@/server/dashboard-data";
+import { CardLimits } from '@/components/cards/card-limits';
+import { CardRequestDialog } from '@/components/cards/card-request-dialog';
+import { UserCards } from '@/components/cards/user-cards';
+import { BankCardTile } from '@/components/dashboard/bank-card';
+import { PageHeader } from '@/components/layout/page-header';
+import { SectionHeader } from '@/components/dashboard/section-header';
+import { TransactionListItem } from '@/components/shared/transaction-list';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { getCardSettings, getDashboardSummary, getTransactions } from '@/server/dashboard-data';
 
 export const metadata: Metadata = {
-  title: "Cards — pagwave",
+  title: 'Cards — pagwave',
 };
 
 export default async function CardsPage() {
@@ -36,7 +36,7 @@ export default async function CardsPage() {
       />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {summary.cards.map((card) => (
+        {summary.cards.map(card => (
           <BankCardTile key={card.id} card={card} />
         ))}
 
@@ -51,14 +51,14 @@ export default async function CardsPage() {
         </div>
 
         <div className="space-y-4 xl:col-span-5">
-          <SectionHeader title="Card activity" actionLabel="All transactions" actionHref="/transactions" />
+          <SectionHeader
+            title="Card activity"
+            actionLabel="All transactions"
+            actionHref="/transactions"
+          />
           <div className="space-y-3">
-            {transactions.map((transaction) => (
-              <TransactionListItem
-                key={transaction.id}
-                transaction={transaction}
-                showDate
-              />
+            {transactions.map(transaction => (
+              <TransactionListItem key={transaction.id} transaction={transaction} showDate />
             ))}
           </div>
 
