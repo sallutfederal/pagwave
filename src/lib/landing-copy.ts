@@ -204,24 +204,6 @@ export const landingCopy = {
     title: "Boring on purpose where it matters.",
     lead:
       "Every dependency earns its place: typed contracts, real caching, accessible primitives. Nothing for the sake of a trend.",
-    groups: [
-      {
-        title: "Framework",
-        items: ["Next.js 16 (App Router)", "React 19", "Turbopack", "Cache Components"],
-      },
-      {
-        title: "UI",
-        items: ["Tailwind CSS v4", "Radix UI primitives", "lucide-react", "Plus Jakarta Sans"],
-      },
-      {
-        title: "Data",
-        items: ["zod contracts", "Route handlers", "TanStack Query", "'use cache'"],
-      },
-      {
-        title: "Landing",
-        items: ["Motion", "Lenis", "Sora + Inter", "Zero image assets"],
-      },
-    ],
   },
 
   cta: {
@@ -233,7 +215,6 @@ export const landingCopy = {
   },
 
   footer: {
-    tagline: "A fintech dashboard built as a product, not a screenshot.",
     columns: [
       {
         title: "Product",

@@ -1,4 +1,3 @@
-import { Github } from "lucide-react";
 import Link from "next/link";
 
 import { LogoMark } from "@/components/brand/logo";
@@ -15,18 +14,6 @@ export function LandingFooter() {
               pagwave
             </span>
           </Link>
-          <p className="mt-4 max-w-xs text-sm leading-relaxed text-lh-muted">
-            {landingCopy.footer.tagline}
-          </p>
-          <a
-            href="https://github.com/secsantander23/fintech"
-            target="_blank"
-            rel="noreferrer"
-            className="lh-mono mt-5 inline-flex items-center gap-2 text-xs text-lh-muted transition-colors hover:text-lh-fg"
-          >
-            <Github className="size-4" />
-            secsantander23/fintech
-          </a>
         </div>
 
         {landingCopy.footer.columns.map((column) => (
