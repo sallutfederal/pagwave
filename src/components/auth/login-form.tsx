@@ -28,9 +28,6 @@ const COPY = {
     passwordPlaceholder: "Senha",
     twoFactorCaption: "Digite o código de 6 dígitos do seu aplicativo autenticador.",
     forgot: "Esqueceu a senha?",
-    orLabel: "ou",
-    demo: "Entrar com conta demo",
-    demoFilled: "Credenciais demo preenchidas. Clique em Entrar.",
     submit: "Entrar",
     submitting: "Entrando...",
     verifySubmit: "Verificar e entrar",
@@ -58,9 +55,6 @@ const COPY = {
     passwordPlaceholder: "Password",
     twoFactorCaption: "Two-factor authentication is enabled. Enter your 6-digit code.",
     forgot: "Forgot password?",
-    orLabel: "or",
-    demo: "Fill demo account",
-    demoFilled: "Demo credentials filled. Click Sign in to enter.",
     submit: "Sign in",
     submitting: "Signing in...",
     verifySubmit: "Verify & Sign in",
@@ -152,15 +146,6 @@ export function LoginForm() {
     } finally {
       setPending(false);
     }
-  }
-
-  function fillDemo() {
-    setEmail("demo@pagwave.com");
-    setPassword("Demo@1234");
-    setNeeds2FA(false);
-    setTwoFactorCode("");
-    setError(null);
-    setNotice(t.demoFilled);
   }
 
   return (
@@ -287,25 +272,7 @@ export function LoginForm() {
           )}
         </button>
 
-        {!needs2FA ? (
-          <div className="space-y-3 pt-1">
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-white/10" />
-              <span className="text-xs text-white/40">{t.orLabel}</span>
-              <div className="h-px flex-1 bg-white/10" />
-            </div>
-
-            <button
-              type="button"
-              onClick={fillDemo}
-              disabled={pending}
-              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/15 bg-white/[0.06] px-4 text-xs font-medium text-white/90 transition hover:border-[#e7d599]/35 hover:bg-white/[0.12] disabled:opacity-50"
-            >
-              <KeyRound className="size-3.5 text-[#e7d599]" />
-              <span>{t.demo}</span>
-            </button>
-          </div>
-        ) : (
+        {needs2FA ? (
           <button
             type="button"
             onClick={() => {
@@ -317,7 +284,7 @@ export function LoginForm() {
           >
             {t.useAnother}
           </button>
-        )}
+        ) : null}
       </form>
 
       <p className="mt-5 text-center text-sm text-white/60">
