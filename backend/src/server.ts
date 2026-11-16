@@ -155,8 +155,4 @@ async function startStandalone() {
   }
 }
 
-if (!process.env.VERCEL) {
-  void startStandalone();
-}
-
-export default app;
+void startStandalone();
