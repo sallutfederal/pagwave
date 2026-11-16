@@ -17,7 +17,7 @@ import { gatewayRoutes } from "./modules/gateway/gateway.routes.js";
 import { transactionRoutes } from "./modules/transactions/transaction.routes.js";
 import { walletRoutes } from "./modules/wallets/wallet.routes.js";
 
-export function buildServer() {
+function buildServer() {
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -133,7 +133,7 @@ export function buildServer() {
   return app;
 }
 
-export const app = buildServer();
+const app = buildServer();
 
 async function startStandalone() {
   const shutdown = async (signal: string) => {
