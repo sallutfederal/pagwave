@@ -17,7 +17,7 @@ import { gatewayRoutes } from "./modules/gateway/gateway.routes.js";
 import { transactionRoutes } from "./modules/transactions/transaction.routes.js";
 import { walletRoutes } from "./modules/wallets/wallet.routes.js";
 
-export async function buildServer() {
+export function buildServer() {
   const app = Fastify({
     logger: {
       level: env.LOG_LEVEL,
@@ -30,25 +30,25 @@ export async function buildServer() {
 
   /* ------------------------------ Security ------------------------------- */
 
-  await app.register(helmet);
+  void app.register(helmet);
 
-  await app.register(cors, {
+  void app.register(cors, {
     origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
     credentials: true,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   });
 
-  await app.register(rateLimit, {
+  void app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW_MS,
   });
 
-  await app.register(jwt, { secret: env.JWT_ACCESS_SECRET });
+  void app.register(jwt, { secret: env.JWT_ACCESS_SECRET });
 
   /* ------------------------------- Docs ---------------------------------- */
 
   if (env.NODE_ENV !== "production") {
-    await app.register(swagger, {
+    void app.register(swagger, {
       openapi: {
         info: {
           title: "Pagwave API",
@@ -62,7 +62,7 @@ export async function buildServer() {
         },
       },
     });
-    await app.register(swaggerUi, { routePrefix: "/docs" });
+    void app.register(swaggerUi, { routePrefix: "/docs" });
   }
 
   /* ----------------------------- Error handler --------------------------- */
@@ -123,17 +123,17 @@ export async function buildServer() {
     }
   });
 
-  await app.register(authRoutes, { prefix: `${env.API_PREFIX}/auth` });
-  await app.register(walletRoutes, { prefix: `${env.API_PREFIX}/wallets` });
-  await app.register(transactionRoutes, { prefix: `${env.API_PREFIX}/transactions` });
-  await app.register(cardRoutes, { prefix: `${env.API_PREFIX}/cards` });
-  await app.register(adminRoutes, { prefix: `${env.API_PREFIX}/admin` });
-  await app.register(gatewayRoutes, { prefix: `${env.API_PREFIX}/gateway` });
+  void app.register(authRoutes, { prefix: `${env.API_PREFIX}/auth` });
+  void app.register(walletRoutes, { prefix: `${env.API_PREFIX}/wallets` });
+  void app.register(transactionRoutes, { prefix: `${env.API_PREFIX}/transactions` });
+  void app.register(cardRoutes, { prefix: `${env.API_PREFIX}/cards` });
+  void app.register(adminRoutes, { prefix: `${env.API_PREFIX}/admin` });
+  void app.register(gatewayRoutes, { prefix: `${env.API_PREFIX}/gateway` });
 
   return app;
 }
 
-export const app = await buildServer();
+export const app = buildServer();
 
 async function startStandalone() {
   const shutdown = async (signal: string) => {
