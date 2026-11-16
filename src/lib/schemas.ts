@@ -4,12 +4,44 @@ import { z } from "zod";
 /*                                  Shared                                    */
 /* -------------------------------------------------------------------------- */
 
-export const currencySchema = z.enum(["USD", "EUR", "TRY"]);
+export const currencySchema = z.enum([
+  "USD",
+  "EUR",
+  "BRL",
+  "MXN",
+  "COP",
+  "ARS",
+  "BOB",
+  "CLP",
+  "VES",
+  "USDT",
+  "USDC",
+]);
+
+/** Currencies a card can be issued in (cards spend from fiat wallets). */
+export const cardCurrencySchema = z.enum(["USD", "EUR", "BRL"]);
 
 export const avatarSchema = z.object({
-  /** Remote photo (pravatar). When it fails to load the UI falls back to initials. */
+  /** Remote photo. Empty means "no photo": the UI renders the initials instead. */
   url: z.string(),
   initials: z.string().min(1).max(3),
+});
+
+/* -------------------------------------------------------------------------- */
+/*                                  Wallets                                   */
+/* -------------------------------------------------------------------------- */
+
+export const walletSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  currency: currencySchema,
+  currencyName: z.string(),
+  type: z.enum(["FIAT", "CRYPTO"]),
+  balance: z.number(),
+  available: z.number(),
+  /** Held for pending operations, e.g. a withdrawal still processing. */
+  frozen: z.number(),
+  isDefault: z.boolean(),
 });
 
 /* -------------------------------------------------------------------------- */
@@ -27,6 +59,7 @@ export const bankCardSchema = z.object({
   holder: z.string(),
   /** User-given name, e.g. "Travel card". Falls back to the holder when absent. */
   label: z.string().optional(),
+  frozen: z.boolean().optional(),
 });
 
 /** Per-card controls rendered on the Cards page. */
@@ -106,6 +139,8 @@ export const transactionSchema = z.object({
   avatar: avatarSchema,
   amount: z.number(),
   currency: currencySchema,
+  /** The same amount priced in USD, for totals across currencies. `null` when no rate is known. */
+  usdAmount: z.number().nullable(),
   date: z.string(),
   category: z.string(),
   /** How the money moved, e.g. `Card ••1810`. */
@@ -137,40 +172,6 @@ export const conversationSchema = z.object({
 });
 
 /* -------------------------------------------------------------------------- */
-/*                                 Products                                   */
-/* -------------------------------------------------------------------------- */
-
-export const productSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  category: z.string(),
-  plan: z.string(),
-  price: z.number(),
-  currency: currencySchema,
-  /** Billing cadence in months; 0 means one-off / free. */
-  interval: z.number().min(0),
-  status: z.enum(["Active", "Pending", "Paused"]),
-  renewsAt: z.string(),
-  avatar: avatarSchema,
-});
-
-/* -------------------------------------------------------------------------- */
-/*                                Customers                                   */
-/* -------------------------------------------------------------------------- */
-
-export const customerSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  email: z.string().email(),
-  avatar: avatarSchema,
-  plan: z.enum(["Free", "Plus", "Enterprise"]),
-  status: z.enum(["Active", "Pending", "Blocked"]),
-  /** Lifetime value in USD. */
-  ltv: z.number(),
-  joinedAt: z.string(),
-});
-
-/* -------------------------------------------------------------------------- */
 /*                               New card form                                */
 /* -------------------------------------------------------------------------- */
 
@@ -179,12 +180,7 @@ export const newCardSchema = z.object({
   label: z.string().trim().min(2, "Give the card a label").max(40, "Label is too long"),
   holder: z.string().trim().min(2, "Cardholder is required").max(60, "Name is too long"),
   brand: z.enum(["visa", "mastercard"]),
-  last4: z
-    .string()
-    .trim()
-    .regex(/^\d{4}$/, "Use the last 4 digits"),
-  expiry: z.string().trim().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Use the MM/YY format"),
-  balance: z.coerce.number().min(0, "Balance cannot be negative").max(1_000_000, "Balance is too high"),
+  currency: cardCurrencySchema,
   variant: z.enum(["dark", "light"]),
 });
 
@@ -206,15 +202,15 @@ export const dashboardSummarySchema = z.object({
 });
 
 export const cardSettingsSchema = z.object({ settings: z.array(cardSettingSchema) });
+export const walletsSchema = z.object({ wallets: z.array(walletSchema) });
 export const recentSalesSchema = z.object({ sales: z.array(saleSchema) });
 export const transactionsSchema = z.object({ transactions: z.array(transactionSchema) });
 export const conversationsSchema = z.object({ conversations: z.array(conversationSchema) });
-export const productsSchema = z.object({ products: z.array(productSchema) });
-export const customersSchema = z.object({ customers: z.array(customerSchema) });
 
 /* --------------------------------- types ---------------------------------- */
 
 export type Currency = z.infer<typeof currencySchema>;
+export type Wallet = z.infer<typeof walletSchema>;
 export type Avatar = z.infer<typeof avatarSchema>;
 export type BankCard = z.infer<typeof bankCardSchema>;
 export type NewCard = z.infer<typeof newCardSchema>;
@@ -227,6 +223,4 @@ export type SaleStatus = z.infer<typeof saleStatusSchema>;
 export type Transaction = z.infer<typeof transactionSchema>;
 export type TransactionStatus = z.infer<typeof transactionStatusSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
-export type Product = z.infer<typeof productSchema>;
-export type Customer = z.infer<typeof customerSchema>;
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;

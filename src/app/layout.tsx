@@ -1,10 +1,21 @@
 import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans, Sora } from "next/font/google";
+import localFont from "next/font/local";
 
 import { Providers } from "@/components/providers";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
+
+const telegraf = localFont({
+  src: [
+    { path: "./fonts/telegraf-regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/telegraf-medium.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/telegraf-bold.ttf", weight: "700", style: "normal" },
+  ],
+  variable: "--font-telegraf",
+  display: "swap",
+});
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -35,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${jakarta.variable} ${sora.variable} ${inter.variable}`}
+      className={`${telegraf.variable} ${jakarta.variable} ${sora.variable} ${inter.variable}`}
     >
       <body className="antialiased">
         <Providers>

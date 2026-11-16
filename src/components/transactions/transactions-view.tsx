@@ -72,14 +72,16 @@ export function TransactionsView({ transactions }: { transactions: Transaction[]
     });
   }, [query, status, transactions]);
 
+  // Wallets hold different currencies, so totals use the USD-priced amount.
+  // A row without a known rate is left out instead of being counted at face value.
   const { totalIn, totalOut, count } = useMemo(
     () => ({
       totalIn: transactions
         .filter((item) => item.direction === "in")
-        .reduce((sum, item) => sum + Math.abs(item.amount), 0),
+        .reduce((sum, item) => sum + Math.abs(item.usdAmount ?? 0), 0),
       totalOut: transactions
         .filter((item) => item.direction === "out")
-        .reduce((sum, item) => sum + Math.abs(item.amount), 0),
+        .reduce((sum, item) => sum + Math.abs(item.usdAmount ?? 0), 0),
       count: transactions.length,
     }),
     [transactions],
@@ -90,14 +92,14 @@ export function TransactionsView({ transactions }: { transactions: Transaction[]
       <div className="grid gap-4 sm:grid-cols-3">
         <SummaryTile
           icon={<ArrowDownLeft className="size-5" />}
-          label="Money in"
-          value={formatCurrency({ amount: totalIn, currency: "USD", fractionDigits: 0 })}
+          label="Money in (USD value)"
+          value={formatCurrency({ amount: totalIn, currency: "USD", fractionDigits: 2 })}
           tone="in"
         />
         <SummaryTile
           icon={<ArrowUpRight className="size-5" />}
-          label="Money out"
-          value={formatCurrency({ amount: totalOut, currency: "USD", fractionDigits: 0 })}
+          label="Money out (USD value)"
+          value={formatCurrency({ amount: totalOut, currency: "USD", fractionDigits: 2 })}
           tone="out"
         />
         <SummaryTile
@@ -193,9 +195,9 @@ export function TransactionsView({ transactions }: { transactions: Transaction[]
                     {
                       amount: transaction.amount,
                       currency: transaction.currency,
-                      fractionDigits: 0,
+                      fractionDigits: 2,
                     },
-                    { showSymbol: false, useGrouping: false },
+                    { signBeforeSymbol: true },
                   )}
                 </span>
               </li>

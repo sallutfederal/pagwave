@@ -1,0 +1,27 @@
+# Local development infrastructure.
+#
+#   docker compose up -d
+#
+# Postgres is published on 5433 (not 5432) so it never collides with a
+# PostgreSQL already installed on the host.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pagwave-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pagwave
+      POSTGRES_PASSWORD: pagwave_secret
+      POSTGRES_DB: pagwave_db
+    ports:
+      - '5433:5432'
+    volumes:
+      - pagwave_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pagwave -d pagwave_db']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pagwave_pgdata:

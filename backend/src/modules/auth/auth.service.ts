@@ -10,6 +10,7 @@ import {
   UnauthorizedError,
 } from "../../lib/errors.js";
 import { generateSecureToken } from "../../lib/id.js";
+import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/mailer.js";
 import type {
   ChangePasswordInput,
   ForgotPasswordInput,
@@ -49,8 +50,8 @@ export async function registerUser(input: RegisterInput) {
     include: { profile: true },
   });
 
-  // TODO: Send verification email via notification service
-  // await sendVerificationEmail(user.email, emailVerifyToken);
+  // Fire and forget: delivery problems are logged by the mailer, never thrown.
+  void sendVerificationEmail(user.email, emailVerifyToken);
 
   // Create default wallets for the user
   const defaultCurrencies = ["USD", "EUR", "BRL", "USDT"];
@@ -119,7 +120,7 @@ export async function loginUser(input: LoginInput, meta: { ip?: string; userAgen
   if (!valid) {
     // Increment failed login counter
     const failedLogins = user.failedLogins + 1;
-    const updateData: any = { failedLogins };
+    const updateData: { failedLogins: number; lockedUntil?: Date } = { failedLogins };
 
     // Lock after 5 consecutive failures for 15 minutes
     if (failedLogins >= 5) {
@@ -255,6 +256,10 @@ export async function validateRefreshToken(refreshToken: string) {
     throw new UnauthorizedError("Invalid or expired refresh token.");
   }
 
+  if (["SUSPENDED", "BLOCKED", "CLOSED"].includes(session.user.status)) {
+    throw new UnauthorizedError("Account is not active. Contact support.");
+  }
+
   return session.user;
 }
 
@@ -281,6 +286,23 @@ export async function verifyEmail(token: string) {
   return { email: user.email };
 }
 
+// ─── Resend verification e-mail ─────────────────────────────────────────────
+
+export async function resendVerificationEmail(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new NotFoundError("User");
+
+  if (user.emailVerified) {
+    throw new BadRequestError("This e-mail address is already verified.");
+  }
+
+  // A fresh token invalidates the previous link.
+  const emailVerifyToken = generateSecureToken();
+  await prisma.user.update({ where: { id: user.id }, data: { emailVerifyToken } });
+
+  void sendVerificationEmail(user.email, emailVerifyToken);
+}
+
 // ─── Forgot Password ───────────────────────────────────────────────────────
 
 export async function requestPasswordReset(input: ForgotPasswordInput) {
@@ -300,8 +322,7 @@ export async function requestPasswordReset(input: ForgotPasswordInput) {
     },
   });
 
-  // TODO: Send reset email via notification service
-  // await sendPasswordResetEmail(user.email, resetToken);
+  void sendPasswordResetEmail(user.email, resetToken);
 
   return { sent: true };
 }

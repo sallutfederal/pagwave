@@ -1,6 +1,7 @@
 "use client";
 
-import { Copy, EyeOff, Snowflake, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Copy, Eye, EyeOff, Snowflake, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -12,15 +13,46 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-export function CardMenu() {
+type CardMenuProps = {
+  isNumberHidden: boolean;
+  isFrozen: boolean;
+  busy?: boolean;
+  isDarkSurface?: boolean;
+  onToggleNumber: () => void;
+  onCopyNumber: () => void;
+  onToggleFreeze: () => void;
+  onRemove: () => void;
+};
+
+export function CardMenu({
+  isNumberHidden,
+  isFrozen,
+  busy = false,
+  isDarkSurface = true,
+  onToggleNumber,
+  onCopyNumber,
+  onToggleFreeze,
+  onRemove,
+}: CardMenuProps) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (!open) setConfirmRemove(false);
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button
           variant="onDark"
           size="icon"
           aria-label="Card options"
-          className="size-8 bg-transparent hover:bg-white/10"
+          className={cn(
+            "size-8 bg-transparent",
+            isDarkSurface
+              ? "text-white hover:bg-white/10"
+              : "text-foreground hover:bg-surface-hover",
+          )}
         >
           <svg viewBox="0 0 24 24" aria-hidden className="size-4 fill-current">
             <circle cx="12" cy="5" r="1.6" />
@@ -30,27 +62,46 @@ export function CardMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>
-        <DropdownMenuItem>
-          <EyeOff /> Hide card number
+        <DropdownMenuItem disabled={busy} onSelect={onToggleNumber}>
+          {isNumberHidden ? <Eye /> : <EyeOff />}
+          {isNumberHidden ? "Show card number" : "Hide card number"}
         </DropdownMenuItem>
-        <DropdownMenuItem>
+        <DropdownMenuItem disabled={busy} onSelect={onCopyNumber}>
           <Copy /> Copy number
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Snowflake /> Freeze card
+        <DropdownMenuItem disabled={busy} onSelect={onToggleFreeze}>
+          <Snowflake /> {isFrozen ? "Unfreeze card" : "Freeze card"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-danger hover:text-danger">
-          <Trash2 /> Remove card
+        <DropdownMenuItem
+          disabled={busy}
+          onSelect={(event) => {
+            if (!confirmRemove) {
+              event.preventDefault();
+              setConfirmRemove(true);
+              return;
+            }
+            setConfirmRemove(false);
+            onRemove();
+          }}
+          className="text-danger hover:text-danger focus:text-danger"
+        >
+          <Trash2 />
+          {confirmRemove ? "Click again to remove" : "Remove card"}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function VisaMark() {
+function VisaMark({ isDarkSurface = true }: { isDarkSurface?: boolean }) {
   return (
-    <span className="text-[19px] leading-none font-extrabold tracking-tight italic text-white">
+    <span
+      className={cn(
+        "text-[19px] leading-none font-extrabold tracking-tight italic",
+        isDarkSurface ? "text-white" : "text-foreground",
+      )}
+    >
       VISA
     </span>
   );
@@ -65,10 +116,22 @@ function MastercardMark({ className }: { className?: string }) {
   );
 }
 
-export function CardBrandMark({ brand, className }: { brand: "visa" | "mastercard"; className?: string }) {
+export function CardBrandMark({
+  brand,
+  isDarkSurface = true,
+  className,
+}: {
+  brand: "visa" | "mastercard";
+  isDarkSurface?: boolean;
+  className?: string;
+}) {
   return (
     <span className={cn("flex items-center", className)}>
-      {brand === "visa" ? <VisaMark /> : <MastercardMark />}
+      {brand === "visa" ? (
+        <VisaMark isDarkSurface={isDarkSurface} />
+      ) : (
+        <MastercardMark />
+      )}
     </span>
   );
 }

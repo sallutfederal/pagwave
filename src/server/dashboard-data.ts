@@ -1,38 +1,293 @@
 import { cacheLife } from "next/cache";
+import { redirect } from "next/navigation";
+import { cache } from "react";
+import type { z } from "zod";
 
-import { userProfile } from "@/data/user-profile";
+import { BackendError, backendFetch } from "@/lib/backend";
 import {
   cardSettingsSchema,
   conversationsSchema,
-  customersSchema,
+  currencySchema,
   dashboardSummarySchema,
   periodSchema,
-  productsSchema,
   recentSalesSchema,
   statisticSchema,
+  transactionSchema,
   transactionsSchema,
+  walletSchema,
+  walletsSchema,
   type BankCard,
   type CardSetting,
   type Conversation,
-  type Customer,
   type Period,
-  type Product,
   type Sale,
   type Transaction,
+  type Wallet,
 } from "@/lib/schemas";
+import { SESSION_EXPIRED_PATH, getCurrentUser } from "@/server/auth";
+import { listWalletFeed } from "@/lib/xpag/store";
 
 /* -------------------------------------------------------------------------- */
-/*                                Data source                                 */
+/*                               Backend access                               */
 /*                                                                            */
-/* Containers are intentionally empty: the UI renders its own empty states    */
-/* until real records are wired in here.                                      */
+/* Everything below talks to the Fastify API with the signed-in user's token. */
+/* None of it may use `"use cache"`: the data is per-user, and a shared cache */
+/* entry would leak one account's balances to another.                        */
 /* -------------------------------------------------------------------------- */
 
-const greeting = userProfile;
+/** A rejected session ends the visit: clear the cookies and go to /login. */
+async function authed<T>(path: string): Promise<T> {
+  try {
+    return await backendFetch<T>(path);
+  } catch (error) {
+    if (error instanceof BackendError && error.status === 401) {
+      redirect(SESSION_EXPIRED_PATH);
+    }
 
-const cards: BankCard[] = [];
+    throw error;
+  }
+}
 
-const cardSettings: CardSetting[] = [];
+/** Keeps the valid rows. One unknown currency must not blank a whole page. */
+function parseRows<S extends z.ZodType>(schema: S, rows: unknown[], what: string): z.output<S>[] {
+  const valid: z.output<S>[] = [];
+
+  for (const row of rows) {
+    const result = schema.safeParse(row);
+
+    if (result.success) valid.push(result.data);
+    else console.warn(`[dashboard-data] skipped an invalid ${what}:`, result.error.issues[0]?.message);
+  }
+
+  return valid;
+}
+
+/* ---------------------------------- wallets -------------------------------- */
+
+type BackendWallet = {
+  id: string;
+  label: string | null;
+  type: "FIAT" | "CRYPTO";
+  currencyCode: string;
+  currencyName: string;
+  balance: string;
+  frozenBalance: string;
+  availableBalance: string;
+  isDefault: boolean;
+};
+
+const loadWallets = cache(async (): Promise<Wallet[]> => {
+  const rows = await authed<BackendWallet[]>("/wallets");
+
+  return parseRows(
+    walletSchema,
+    rows.map((wallet) => ({
+      id: wallet.id,
+      label: wallet.label ?? `${wallet.currencyCode} Wallet`,
+      currency: wallet.currencyCode,
+      currencyName: wallet.currencyName,
+      type: wallet.type,
+      balance: Number(wallet.balance),
+      available: Number(wallet.availableBalance),
+      frozen: Number(wallet.frozenBalance),
+      isDefault: wallet.isDefault,
+    })),
+    "wallet",
+  );
+});
+
+export async function getWallets() {
+  return walletsSchema.parse({ wallets: await loadWallets() });
+}
+
+/* ----------------------------------- cards --------------------------------- */
+
+type BackendCard = {
+  id: string;
+  status: string;
+  brand: "VISA" | "MASTERCARD";
+  variant: "DARK" | "LIGHT";
+  label: string | null;
+  last4: string;
+  expiry: string;
+  holderName: string;
+  currencyCode: string;
+  transactionCount: number;
+  linkedWalletId: string | null;
+  monthlyLimit: string;
+  monthlySpent: string;
+  activatedAt: string | null;
+  createdAt: string;
+};
+
+const loadCards = cache(async () => {
+  const [cards, wallets] = await Promise.all([authed<BackendCard[]>("/cards"), loadWallets()]);
+  const balanceOf = new Map(wallets.map((wallet) => [wallet.id, wallet.available]));
+
+  const bankCards: BankCard[] = [];
+  const settings: CardSetting[] = [];
+
+  for (const card of cards) {
+    const currency = currencySchema.safeParse(card.currencyCode);
+    if (!currency.success) continue;
+
+    bankCards.push({
+      id: card.id,
+      variant: card.variant === "LIGHT" ? "light" : "dark",
+      // A card spends from its linked wallet: that balance is the card's balance.
+      balance: card.linkedWalletId ? (balanceOf.get(card.linkedWalletId) ?? 0) : 0,
+      currency: currency.data,
+      last4: card.last4,
+      expiry: card.expiry,
+      brand: card.brand === "MASTERCARD" ? "mastercard" : "visa",
+      holder: card.holderName,
+      label: card.label ?? undefined,
+      frozen: card.status === "FROZEN",
+    });
+
+    settings.push({
+      cardId: card.id,
+      label: card.label ?? card.holderName,
+      monthlyLimit: Number(card.monthlyLimit),
+      spent: Number(card.monthlySpent),
+      transactions: card.transactionCount,
+      frozen: card.status === "FROZEN",
+      linkedAt: card.activatedAt ?? card.createdAt,
+    });
+  }
+
+  return { bankCards, settings };
+});
+
+export async function getDashboardSummary() {
+  const [user, { bankCards }] = await Promise.all([getCurrentUser(), loadCards()]);
+
+  return dashboardSummarySchema.parse({
+    greeting: {
+      name: user.name,
+      email: user.email,
+      title: "Dashboard",
+      subtitle: "Overview",
+      avatar: { url: "", initials: user.initials },
+      accountLabel: "My account",
+    },
+    cards: bankCards,
+    quickActions,
+  });
+}
+
+export async function getCardSettings() {
+  const { settings } = await loadCards();
+
+  return cardSettingsSchema.parse({ settings });
+}
+
+/* -------------------------------- transactions ----------------------------- */
+
+type BackendTransaction = {
+  id: string;
+  referenceId: string;
+  type: string;
+  status: string;
+  amount: string;
+  usdAmount: string | null;
+  currencyCode: string;
+  toCurrencyCode: string | null;
+  description: string | null;
+  createdAt: string;
+};
+
+type TransactionKind = { label: string; badge: string; direction: "in" | "out" };
+
+const TRANSACTION_KINDS: Record<string, TransactionKind> = {
+  DEPOSIT: { label: "Deposit", badge: "DP", direction: "in" },
+  WITHDRAWAL: { label: "Withdrawal", badge: "WD", direction: "out" },
+  TRANSFER_IN: { label: "Transfer received", badge: "IN", direction: "in" },
+  TRANSFER_OUT: { label: "Transfer sent", badge: "OUT", direction: "out" },
+  EXCHANGE: { label: "Exchange", badge: "FX", direction: "out" },
+  CARD_PAYMENT: { label: "Card payment", badge: "CP", direction: "out" },
+  CARD_REFUND: { label: "Card refund", badge: "RF", direction: "in" },
+  FEE: { label: "Fee", badge: "FE", direction: "out" },
+  INTEREST: { label: "Interest", badge: "IR", direction: "in" },
+  AIRDROP: { label: "Airdrop", badge: "AD", direction: "in" },
+  STAKING_REWARD: { label: "Staking reward", badge: "SR", direction: "in" },
+};
+
+function transactionStatus(status: string): Transaction["status"] {
+  switch (status) {
+    case "COMPLETED":
+      return "Completed";
+    case "PENDING":
+    case "PROCESSING":
+    case "FROZEN":
+      return "Pending";
+    default:
+      return "Failed"; // FAILED, CANCELLED, REVERSED
+  }
+}
+
+function toTransaction(tx: BackendTransaction): unknown {
+  const kind = TRANSACTION_KINDS[tx.type] ?? { label: tx.type, badge: "TX", direction: "out" as const };
+  const amount = Number(tx.amount);
+  const usd = tx.usdAmount === null ? null : Number(tx.usdAmount);
+  const sign = kind.direction === "in" ? 1 : -1;
+
+  return {
+    id: tx.id,
+    title: tx.description ?? kind.label,
+    subtitle: tx.referenceId,
+    avatar: { url: "", initials: kind.badge },
+    amount: sign * amount,
+    currency: tx.currencyCode,
+    usdAmount: usd === null ? null : sign * usd,
+    date: tx.createdAt,
+    category: kind.label,
+    method: tx.toCurrencyCode ? `${tx.currencyCode} → ${tx.toCurrencyCode}` : `${tx.currencyCode} wallet`,
+    status: transactionStatus(tx.status),
+    direction: kind.direction,
+  };
+}
+
+export async function getTransactions(limit?: number) {
+  // The API caps a page at 100 rows.
+  const take = Math.min(limit ?? 100, 100);
+  const { data } = await authed<{ data: BackendTransaction[] }>(`/transactions?limit=${take}`);
+
+  return transactionsSchema.parse({
+    transactions: parseRows(transactionSchema, data.map(toTransaction), "transaction"),
+  });
+}
+
+/* --------------------------------- statistic ------------------------------- */
+
+type BackendStatistic = {
+  total: number;
+  segments: { id: string; label: string; value: number }[];
+};
+
+export async function getStatistic(period: Period) {
+  const stat = await authed<BackendStatistic>(`/transactions/statistic?period=${period}`);
+
+  return statisticSchema.parse({
+    total: stat.total,
+    currency: "USD",
+    period,
+    label: "Spending",
+    segments: stat.segments.map((segment) => ({
+      ...segment,
+      // Share of the 360° ring. With nothing spent every arc collapses to 0.
+      degrees: stat.total > 0 ? (segment.value / stat.total) * 360 : 0,
+    })),
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/*                       Not connected yet (phases 3 and 4)                   */
+/*                                                                            */
+/* Sales and messages belong to the merchant/checkout module.               */
+/* They stay empty (the UI renders its own empty states) and, having          */
+/* no per-user data, can keep being cached.                                   */
+/* -------------------------------------------------------------------------- */
 
 const quickActions = [
   { id: "transfer", label: "Transfer", active: true },
@@ -41,72 +296,37 @@ const quickActions = [
   { id: "transport", label: "Transport", active: false },
 ] as const;
 
-const sales: Sale[] = [];
-
-const transactions: Transaction[] = [];
-
 const conversations: Conversation[] = [];
 
-const products: Product[] = [];
-
-const customers: Customer[] = [];
-
-/** Ring layout per period: [bills, money transactions] in degrees. */
-const statisticByPeriod = {
-  "this-month": {
-    total: 0,
-    label: "Usage",
-    segments: [{ id: "bills", label: "Payment of the bills", value: 0, degrees: 0 }],
-  },
-  "last-month": {
-    total: 0,
-    label: "Usage",
-    segments: [{ id: "bills", label: "Payment of the bills", value: 0, degrees: 0 }],
-  },
-  "last-year": {
-    total: 0,
-    label: "Usage",
-    segments: [{ id: "bills", label: "Payment of the bills", value: 0, degrees: 0 }],
-  },
-} as const;
-
-/* -------------------------------------------------------------------------- */
-/*                          Shared service layer                             */
-/*                                                                            */
-/* The UI talks to these functions. Route handlers expose them over HTTP      */
-/* (src/app/api/**) and Server Components call them directly — the same       */
-/* Backend-for-Frontend pattern Next recommends, so there is no self-fetch.  */
-/*                                                                            */
-/* Swap the empty containers for real queries and the whole app keeps working.*/
-/* -------------------------------------------------------------------------- */
-
-export async function getDashboardSummary() {
-  "use cache";
-  cacheLife("hours");
-
-  return dashboardSummarySchema.parse({ greeting, cards, quickActions });
-}
-
-export async function getCardSettings() {
-  "use cache";
-  cacheLife("hours");
-
-  return cardSettingsSchema.parse({ settings: cardSettings.map((item) => ({ ...item })) });
-}
-
 export async function getRecentSales() {
-  "use cache";
-  cacheLife("hours");
+  const user = await getCurrentUser();
+  const { activities } = await listWalletFeed(user.id).catch(() => ({
+    activities: [],
+    webhooks: [],
+  }));
 
-  return recentSalesSchema.parse({ sales: sales.map((item) => ({ ...item })) });
-}
+  const rows = activities
+    .filter((a) => a.kind === "cashin")
+    .slice(0, 6)
+    .map((a) => ({
+      id: a.id,
+      customer: {
+        name: a.destinationSummary || `${a.currency} ${a.rail || "Cash-in"}`,
+        email: a.externalId || a.requestNumber || user.email,
+        avatar: { url: "", initials: a.currency.slice(0, 2) },
+      },
+      status:
+        a.status === "paid" || a.status === "completed"
+          ? ("Success" as const)
+          : a.status === "failed" || a.status === "expired"
+            ? ("Failed" as const)
+            : ("Process" as const),
+      amount: typeof a.amount === "number" ? a.amount : 0,
+      currency: a.currency as Sale["currency"],
+    }))
+    .filter((row) => currencySchema.safeParse(row.currency).success);
 
-export async function getTransactions(limit?: number) {
-  "use cache";
-  cacheLife("hours");
-
-  const all = transactions.map((item) => ({ ...item }));
-  return transactionsSchema.parse({ transactions: typeof limit === "number" ? all.slice(0, limit) : all });
+  return recentSalesSchema.parse({ sales: rows });
 }
 
 export async function getConversations() {
@@ -114,35 +334,6 @@ export async function getConversations() {
   cacheLife("hours");
 
   return conversationsSchema.parse({ conversations: conversations.map((item) => ({ ...item })) });
-}
-
-export async function getProducts() {
-  "use cache";
-  cacheLife("hours");
-
-  return productsSchema.parse({ products: products.map((item) => ({ ...item })) });
-}
-
-export async function getCustomers() {
-  "use cache";
-  cacheLife("hours");
-
-  return customersSchema.parse({ customers: customers.map((item) => ({ ...item })) });
-}
-
-export async function getStatistic(period: Period) {
-  "use cache";
-  cacheLife("hours");
-
-  const preset = statisticByPeriod[period];
-
-  return statisticSchema.parse({
-    total: preset.total,
-    currency: "USD",
-    period,
-    label: preset.label,
-    segments: preset.segments.map((segment) => ({ ...segment })),
-  });
 }
 
 /* -------------------------------------------------------------------------- */

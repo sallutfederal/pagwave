@@ -6,7 +6,8 @@ import { useRef, useState, type DragEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/profile/user-avatar";
-import { saveProfile, useProfile } from "@/lib/profile-store";
+import { useSession } from "@/components/session-provider";
+import { saveAvatar, useProfile } from "@/lib/profile-store";
 import { cn } from "@/lib/utils";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -35,6 +36,7 @@ async function toSquareDataUrl(file: File, size = OUTPUT_SIZE): Promise<string> 
 
 export function AvatarUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { id: userId } = useSession();
   const { avatar: savedAvatar } = useProfile();
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -58,7 +60,7 @@ export function AvatarUpload() {
     try {
       const dataUrl = await toSquareDataUrl(file);
       setPreview(dataUrl);
-      saveProfile({ avatar: dataUrl });
+      saveAvatar(userId, dataUrl);
     } catch {
       setError("We could not read that image. Try another file.");
     }
@@ -74,7 +76,7 @@ export function AvatarUpload() {
 
   function removePhoto() {
     setPreview(null);
-    saveProfile({ avatar: null });
+    saveAvatar(userId, null);
     if (inputRef.current) inputRef.current.value = "";
   }
 

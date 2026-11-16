@@ -16,7 +16,7 @@ type CurrencyOptions = {
   useGrouping?: boolean;
 };
 
-/** Formats money the way the reference does: symbol, thousands separator and one decimal. */
+/** Formats money with symbol, thousands separator and (by default) one decimal. */
 export function formatCurrency(
   { amount, currency, fractionDigits = 1 }: Currency,
   {
@@ -42,10 +42,14 @@ export function currencySymbol(currency: string, spaced = true) {
   switch (currency) {
     case "USD":
       return spaced ? "$ " : "$";
-    case "TRY":
-      return "₺";
     case "EUR":
       return spaced ? "€ " : "€";
+    case "BRL":
+      return spaced ? "R$ " : "R$";
+    case "USDT":
+    case "USDC":
+      // No single-glyph convention that renders everywhere: the code is unambiguous.
+      return spaced ? `${currency} ` : currency;
     default:
       return spaced ? `${currency} ` : currency;
   }

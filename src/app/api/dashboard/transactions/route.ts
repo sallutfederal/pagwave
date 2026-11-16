@@ -1,3 +1,4 @@
+import { privateJson } from "@/server/api";
 import { getTransactions } from "@/server/dashboard-data";
 
 /**
@@ -11,7 +12,5 @@ export async function GET(request: Request) {
   const raw = Number.parseInt(searchParams.get("limit") ?? "", 10);
   const limit = Number.isFinite(raw) ? Math.min(Math.max(raw, 1), 100) : undefined;
 
-  const { transactions } = await getTransactions(limit);
-
-  return Response.json({ transactions });
+  return privateJson(() => getTransactions(limit));
 }

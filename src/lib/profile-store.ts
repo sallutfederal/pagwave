@@ -2,109 +2,66 @@
 
 import { useSyncExternalStore } from "react";
 
-import { userProfile } from "@/data/user-profile";
+import { useSession } from "@/components/session-provider";
 
-const STORAGE_KEY = "pagwave:profile";
-const CHANGE_EVENT = "pagwave:profile-change";
+/**
+ * Account identity (name, e-mail) comes from the signed-in session — the API is
+ * the source of truth. The only thing kept on this device is the profile photo,
+ * and it is stored per user so a second account on the same browser never
+ * inherits the first one's picture.
+ */
 
-const subscribers = new Set<() => void>();
+const CHANGE_EVENT = "pagwave:avatar-change";
 
 export type Profile = {
   name: string;
   email: string;
-  /** Data URL of the uploaded photo, or `null` to keep the default avatar. */
+  /** Data URL of the uploaded photo, or `null` to show the initials. */
   avatar: string | null;
 };
 
-/** The defaults from `src/data/user-profile.ts`, overridable at runtime. */
-export const defaultProfile: Profile = {
-  name: userProfile.name,
-  email: userProfile.email,
-  avatar: null,
-};
+const keyFor = (userId: string) => `pagwave:avatar:${userId}`;
 
 function subscribe(listener: () => void) {
-  subscribers.add(listener);
   window.addEventListener("storage", listener);
   window.addEventListener(CHANGE_EVENT, listener);
 
   return () => {
-    subscribers.delete(listener);
     window.removeEventListener("storage", listener);
     window.removeEventListener(CHANGE_EVENT, listener);
   };
 }
 
-/* `useSyncExternalStore` requires a referentially stable snapshot, so the parsed
-   object is memoised against the raw string kept in localStorage. */
-let snapshotRaw: string | null | undefined;
-let snapshotValue: Profile | null = null;
-
-function getSnapshot(): Profile | null {
-  let raw: string | null = null;
-
+function readAvatar(userId: string): string | null {
   try {
-    raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(keyFor(userId));
+
+    // Only image data URLs are ever rendered; anything else in storage is ignored.
+    return raw?.startsWith("data:image/") ? raw : null;
   } catch {
-    raw = null;
+    return null;
   }
-
-  if (raw === snapshotRaw && (snapshotValue !== null || raw === null)) {
-    return snapshotValue;
-  }
-
-  snapshotRaw = raw;
-  snapshotValue = null;
-
-  if (raw) {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (parsed && typeof parsed === "object") {
-        const record = parsed as Record<string, unknown>;
-        const name = typeof record.name === "string" ? record.name : defaultProfile.name;
-        const email = typeof record.email === "string" ? record.email : defaultProfile.email;
-        const avatar = typeof record.avatar === "string" ? record.avatar : null;
-
-        snapshotValue = { name, email, avatar };
-      }
-    } catch {
-      snapshotValue = null;
-    }
-  }
-
-  return snapshotValue;
 }
 
-function readStoredProfile(): Partial<Profile> {
-  const snapshot = getSnapshot();
-  return snapshot ?? {};
-}
-
-/** Profile with the user's edits applied over the defaults. */
+/** The signed-in user's identity plus their locally stored photo. */
 export function useProfile(): Profile {
-  const stored = useSyncExternalStore(subscribe, getSnapshot, () => null);
+  const user = useSession();
+  const avatar = useSyncExternalStore(
+    subscribe,
+    () => readAvatar(user.id),
+    () => null,
+  );
 
-  return {
-    name: stored?.name ?? defaultProfile.name,
-    email: stored?.email ?? defaultProfile.email,
-    avatar: stored?.avatar ?? null,
-  };
+  return { name: user.name, email: user.email, avatar };
 }
 
-/** Partial update: only the sent fields change, the rest keep their value. */
-export function saveProfile(patch: Partial<Profile>) {
-  const next: Profile = {
-    ...defaultProfile,
-    ...readStoredProfile(),
-    ...patch,
-  };
-
+export function saveAvatar(userId: string, avatar: string | null) {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    if (avatar) window.localStorage.setItem(keyFor(userId), avatar);
+    else window.localStorage.removeItem(keyFor(userId));
   } catch {
-    // Storage full or blocked — keep the session consistent anyway.
+    // Storage full or blocked — the photo simply will not persist.
   }
 
   window.dispatchEvent(new Event(CHANGE_EVENT));
-  subscribers.forEach((listener) => listener());
 }

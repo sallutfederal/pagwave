@@ -3,78 +3,91 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* surfaces */
-  --background: #f4f6fa;
-  --surface: #ffffff;
-  --surface-subtle: #f7f9fc;
-  --surface-hover: #f2f5fa;
+  /* surfaces — atmospheric mist light theme */
+  --background: #eceee9;
+  --surface: rgb(255 255 255 / 0.82);
+  --surface-subtle: rgb(255 255 255 / 0.56);
+  --surface-hover: rgb(24 24 27 / 0.05);
 
   /* sidebar rail */
-  --rail: #0d1117;
-  --rail-soft: #171d26;
+  --rail: #0a0b0e;
+  --rail-soft: rgb(255 255 255 / 0.11);
   --rail-fg: #ffffff;
-  --rail-muted: #78839a;
+  --rail-muted: #8a919e;
 
   /* text */
-  --foreground: #0b1220;
-  --muted-foreground: #8a94a6;
-  --subtle-foreground: #b6bfcd;
+  --foreground: #111317;
+  --muted-foreground: #626875;
+  --subtle-foreground: #8f96a3;
 
   /* lines */
-  --line: #eef1f6;
+  --line: rgb(17 19 23 / 0.09);
 
   /* brand */
-  --accent: #3b82f6;
+  --accent: #18191d;
   --accent-fg: #ffffff;
-  --accent-soft: #eaf1ff;
+  --accent-soft: rgb(24 25 29 / 0.08);
 
   /* status */
-  --success: #16a34a;
-  --success-soft: #e9f8ef;
-  --warning: #f59e0b;
-  --warning-soft: #fef4e6;
-  --danger: #ef4444;
-  --danger-soft: #fdeceb;
+  --success: #15803d;
+  --success-soft: rgb(22 163 74 / 0.12);
+  --warning: #b45309;
+  --warning-soft: rgb(245 158 11 / 0.14);
+  --danger: #dc2626;
+  --danger-soft: rgb(239 68 68 / 0.12);
 
   /* black bank card */
-  --black-card: #0a0e13;
+  --black-card: #090a0d;
 
   /* donut chart */
-  --chart-bills: #7fb2ff;
-  --chart-money: #2b3a4a;
+  --chart-bills: #18191d;
+  --chart-money: #9aa1ad;
 
   /* shape */
-  --card-radius: 24px;
-  --inner-radius: 16px;
-  --card-shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 12px 24px -12px rgb(16 24 40 / 0.1);
-  --float-shadow: 0 8px 30px -6px rgb(16 24 40 / 0.18);
+  --card-radius: 22px;
+  --inner-radius: 14px;
+  --card-shadow:
+    0 1px 2px rgb(16 24 40 / 0.04),
+    0 18px 40px -22px rgb(16 24 40 / 0.16),
+    inset 0 1px 0 rgb(255 255 255 / 0.8);
+  --float-shadow: 0 20px 50px -15px rgb(16 24 40 / 0.22);
 }
 
 .dark {
-  --background: #0a0d12;
-  --surface: #141922;
-  --surface-subtle: #1a2029;
-  --surface-hover: #1f2731;
+  /* surfaces — obsidian glass theme matching /login & /create */
+  --background: #08090c;
+  --surface: rgb(21 23 28 / 0.78);
+  --surface-subtle: rgb(255 255 255 / 0.055);
+  --surface-hover: rgb(255 255 255 / 0.095);
 
-  --rail: #06080b;
-  --rail-soft: #10151c;
+  --rail: #07080b;
+  --rail-soft: rgb(255 255 255 / 0.11);
 
-  --foreground: #f2f5fa;
-  --muted-foreground: #8a94a6;
-  --subtle-foreground: #59626f;
-  --line: #222a35;
+  --foreground: #f4f5f7;
+  --muted-foreground: #9ca3af;
+  --subtle-foreground: #6b7280;
+  --line: rgb(255 255 255 / 0.11);
 
-  --accent: #4c8dff;
-  --accent-soft: #16233c;
+  --accent: #f4f5f7;
+  --accent-fg: #090a0d;
+  --accent-soft: rgb(255 255 255 / 0.1);
 
-  --success-soft: #102519;
-  --warning-soft: #2a1f0c;
-  --danger-soft: #2c1517;
+  --success: #34d399;
+  --success-soft: rgb(52 211 153 / 0.13);
+  --warning: #fbbf24;
+  --warning-soft: rgb(251 191 36 / 0.14);
+  --danger: #fb7185;
+  --danger-soft: rgb(251 113 133 / 0.14);
 
-  --black-card: #05080b;
+  --black-card: #06070a;
 
-  --chart-bills: #4c8dff;
-  --chart-money: #46586b;
+  --chart-bills: #f4f5f7;
+  --chart-money: #3f4652;
+
+  --card-shadow:
+    0 20px 50px -24px rgb(0 0 0 / 0.75),
+    inset 0 1px 0 rgb(255 255 255 / 0.09);
+  --float-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.78);
 }
 
 @theme inline {
@@ -163,14 +176,27 @@
   }
 }
 
-/* Black bank card: radial glow + dot grid + grain noise */
+/* Atmospheric backdrop for internal app workspace */
+.app-atmosphere {
+  background-image:
+    radial-gradient(90% 55% at 50% -10%, rgb(17 19 23 / 0.08) 0%, transparent 62%),
+    radial-gradient(60% 45% at 90% 100%, rgb(17 19 23 / 0.05) 0%, transparent 70%);
+}
+
+.dark .app-atmosphere {
+  background-image:
+    radial-gradient(95% 58% at 52% -14%, rgb(210 214 222 / 0.13) 0%, rgb(110 116 128 / 0.05) 44%, transparent 74%),
+    radial-gradient(75% 48% at 88% 104%, rgb(255 255 255 / 0.045) 0%, transparent 65%);
+}
+
+/* Black bank card: obsidian sheen + subtle dot grid + grain noise */
 .bank-card-dark {
   background-color: var(--black-card);
   background-image:
-    radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1.2px),
-    radial-gradient(120% 90% at 100% 0%, rgb(59 130 246 / 0.22) 0%, transparent 55%),
-    radial-gradient(90% 80% at 0% 100%, rgb(21 39 66 / 0.85) 0%, transparent 62%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    radial-gradient(rgba(255, 255, 255, 0.075) 1px, transparent 1.2px),
+    radial-gradient(120% 90% at 100% 0%, rgb(255 255 255 / 0.14) 0%, transparent 56%),
+    radial-gradient(90% 80% at 0% 100%, rgb(48 52 62 / 0.72) 0%, transparent 62%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
   background-size:
     16px 16px,
     100% 100%,
@@ -178,40 +204,40 @@
     160px 160px;
 }
 
-/* Light bank card: subtle mesh tint */
+/* Light bank card: frosted silver-mist sheen */
 .bank-card-light {
   background-image:
-    radial-gradient(110% 80% at 100% 0%, rgb(59 130 246 / 0.07) 0%, transparent 58%),
-    radial-gradient(90% 70% at 0% 100%, rgb(226 232 240 / 0.6) 0%, transparent 60%);
+    radial-gradient(110% 80% at 100% 0%, rgb(255 255 255 / 0.25) 0%, transparent 58%),
+    radial-gradient(90% 70% at 0% 100%, rgb(148 163 184 / 0.22) 0%, transparent 60%);
 }
 
 /* ========================================================================== */
 /*                            Landing page tokens                            */
 /* ========================================================================== */
-/* Fixed dark theme, independent from the app's light/dark toggle.             */
+/* Architectural warm-paper fintech theme, independent from app dark toggle.  */
 
 :root {
-  --landing-bg: #05070d;
-  --landing-bg-soft: #0a0e18;
-  --landing-surface: rgb(255 255 255 / 0.03);
-  --landing-surface-strong: rgb(255 255 255 / 0.06);
-  --landing-line: rgb(255 255 255 / 0.09);
-  --landing-fg: #f2f5fa;
-  --landing-muted: #98a2b6;
-  --landing-accent: #4c8dff;
-  --landing-accent-2: #a78bfa;
-  --landing-accent-3: #22d3ee;
+  --landing-bg: #efeee7;
+  --landing-bg-soft: #e6e5dc;
+  --landing-surface: #ffffff;
+  --landing-surface-strong: #f7f6f1;
+  --landing-line: #d8d7ce;
+  --landing-fg: #1e1f1d;
+  --landing-muted: #64655f;
+  --landing-accent: #cfa84a;
+  --landing-accent-2: #2a7048;
+  --landing-accent-3: #a57a2e;
 
   /* fluid type scale */
-  --lh-display: clamp(2.75rem, 1.1rem + 6.8vw, 5.5rem);
-  --lh-h2: clamp(1.95rem, 1.2rem + 3vw, 3.25rem);
-  --lh-h3: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
-  --lh-lead: clamp(1.02rem, 0.95rem + 0.4vw, 1.25rem);
-  --lh-eyebrow: 0.75rem;
+  --lh-display: clamp(2.35rem, 1.35rem + 3.8vw, 3.65rem);
+  --lh-h2: clamp(1.85rem, 1.25rem + 2.4vw, 2.85rem);
+  --lh-h3: clamp(1.1rem, 1.02rem + 0.35vw, 1.3rem);
+  --lh-lead: clamp(1rem, 0.96rem + 0.25vw, 1.15rem);
+  --lh-eyebrow: 0.72rem;
   --lh-body: 1rem;
 
-  --lh-font-display: var(--font-sora), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
-  --lh-font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --lh-font-display: var(--font-telegraf), var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+  --lh-font-body: var(--font-telegraf), var(--font-jakarta), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --lh-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
@@ -223,11 +249,10 @@
 
 .lh-grid {
   background-image:
-    linear-gradient(to right, rgb(255 255 255 / 0.045) 1px, transparent 1px),
-    linear-gradient(to bottom, rgb(255 255 255 / 0.045) 1px, transparent 1px);
+    linear-gradient(to right, rgb(30 31 29 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(30 31 29 / 0.045) 1px, transparent 1px);
   background-size: 64px 64px;
-  /* fades the grid out towards every edge */
-  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 90% 65% at 50% 0%, #000 25%, transparent 80%);
 }
 
 .lh-grain::after {
@@ -236,12 +261,10 @@
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  opacity: 0.045;
-  mix-blend-mode: overlay;
+  opacity: 0.025;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* soft coloured blobs, no images involved */
 .lh-aurora {
   position: absolute;
   inset: 0;
@@ -253,68 +276,39 @@
   position: absolute;
   display: block;
   border-radius: 9999px;
-  filter: blur(80px);
-  opacity: 0.5;
+  filter: blur(90px);
+  opacity: 0.35;
 }
 
 .lh-aurora-a {
-  width: 44rem;
-  height: 44rem;
+  width: 38rem;
+  height: 38rem;
   top: -18rem;
-  right: -12rem;
-  background: radial-gradient(circle, rgb(76 141 255 / 0.55), transparent 70%);
+  right: -10rem;
+  background: radial-gradient(circle, rgb(37 99 235 / 0.22), transparent 70%);
 }
 
 .lh-aurora-b {
-  width: 38rem;
-  height: 38rem;
-  top: -8rem;
-  left: -14rem;
-  background: radial-gradient(circle, rgb(167 139 250 / 0.42), transparent 70%);
+  width: 34rem;
+  height: 34rem;
+  top: -10rem;
+  left: -12rem;
+  background: radial-gradient(circle, rgb(5 150 105 / 0.16), transparent 70%);
 }
 
 .lh-aurora-c {
-  width: 30rem;
-  height: 30rem;
+  width: 28rem;
+  height: 28rem;
   bottom: -14rem;
   left: 40%;
-  background: radial-gradient(circle, rgb(34 211 238 / 0.3), transparent 70%);
+  background: radial-gradient(circle, rgb(217 119 6 / 0.12), transparent 70%);
 }
 
-/* cursor spotlight — driven by CSS vars set from Motion */
-.lh-spotlight {
-  background: radial-gradient(
-    420px circle at var(--lh-mx, 50%) var(--lh-my, 0%),
-    rgb(76 141 255 / 0.16),
-    transparent 65%
-  );
-}
-
-/* gradient hairline border that follows the radius */
+/* subtle architectural card border & shadow */
 .lh-ring {
   position: relative;
-}
-
-.lh-ring::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(140deg, rgb(255 255 255 / 0.22), rgb(255 255 255 / 0.04) 45%, transparent 70%);
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-.lh-scanlines {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    rgb(255 255 255 / 0.05) 0 1px,
-    transparent 1px 4px
-  );
+  border: 1px solid var(--landing-line);
+  box-shadow: 0 1px 2px rgb(30 31 29 / 0.04), 0 12px 28px -16px rgb(30 31 29 / 0.1);
 }
 
 /* --- typography ----------------------------------------------------------- */
@@ -322,17 +316,17 @@
 .lh-display {
   font-family: var(--lh-font-display);
   font-size: var(--lh-display);
-  font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.035em;
+  font-weight: 500;
+  line-height: 1.03;
+  letter-spacing: -0.03em;
   text-wrap: balance;
 }
 
 .lh-h2 {
   font-family: var(--lh-font-display);
   font-size: var(--lh-h2);
-  font-weight: 600;
-  line-height: 1.05;
+  font-weight: 500;
+  line-height: 1.06;
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
@@ -340,20 +334,21 @@
 .lh-h3 {
   font-family: var(--lh-font-display);
   font-size: var(--lh-h3);
-  font-weight: 600;
+  font-weight: 500;
+  line-height: 1.18;
   letter-spacing: -0.015em;
 }
 
 .lh-lead {
   font-size: var(--lh-lead);
-  line-height: 1.6;
+  line-height: 1.55;
   text-wrap: pretty;
 }
 
 .lh-eyebrow {
   font-size: var(--lh-eyebrow);
-  font-weight: 500;
-  letter-spacing: 0.16em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -366,7 +361,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* body copy of the landing page (headlines opt into Sora via .lh-display/.lh-h2) */
 .lh-sans {
   font-family: var(--lh-font-body);
 }

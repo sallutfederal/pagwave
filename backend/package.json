@@ -2,6 +2,7 @@
   "name": "pagwave-backend",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "Pagwave Financial Infrastructure — Backend API (TypeScript + Fastify + PostgreSQL)",
   "scripts": {
     "dev": "tsx watch src/server.ts",

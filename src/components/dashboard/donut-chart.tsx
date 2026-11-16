@@ -74,7 +74,7 @@ export function DonutChart({ segments, total, label, currency }: DonutChartProps
         </span>
       </div>
 
-      <span className="bg-rail text-rail-fg absolute top-1/2 right-0.5 -translate-y-1/2 rounded-full px-2.5 py-1 text-[10px] font-medium">
+      <span className="bg-surface border-line text-foreground absolute top-1/2 right-0.5 -translate-y-1/2 rounded-full border px-2.5 py-1 text-[10px] font-medium shadow-sm backdrop-blur-md">
         {label}
       </span>
     </div>

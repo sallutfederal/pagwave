@@ -18,6 +18,8 @@ const envSchema = z.object({
   BCRYPT_SALT_ROUNDS: z.coerce.number().default(12),
 
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  /** Public URL of the web app, used to build links in e-mails. */
+  APP_URL: z.string().url().default("http://localhost:3000"),
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
@@ -34,10 +36,22 @@ const envSchema = z.object({
 
   HOT_WALLET_PRIVATE_KEY: z.string().optional(),
 
+  /**
+   * Trust `X-Forwarded-For` (the web app forwards the real client IP).
+   * Enable ONLY when the API is reachable exclusively through that trusted
+   * proxy, otherwise clients can spoof their IP and dodge rate limits.
+   */
+  TRUST_PROXY: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
 
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+
+  INTERNAL_SERVICE_SECRET: z.string().min(16).default("pagwave-internal-dev-secret-change-me"),
 });
 
 function loadEnv() {

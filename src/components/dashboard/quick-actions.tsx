@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Bus, Landmark, Receipt, Send, type LucideIcon } from "lucide-react";
 
 import type { QuickAction } from "@/lib/schemas";
@@ -12,6 +13,13 @@ const icons: Record<QuickAction["id"], LucideIcon> = {
   transport: Bus,
 };
 
+const actionHref: Record<QuickAction["id"], string> = {
+  transfer: "/wallet",
+  utility: "/wallet",
+  taxes: "/transactions",
+  transport: "/cards",
+};
+
 export function QuickActions({ actions }: { actions: QuickAction[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -20,27 +28,26 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
         const active = action.active;
 
         return (
-          <button
+          <Link
             key={action.id}
-            type="button"
-            aria-pressed={active}
+            href={actionHref[action.id]}
             className={cn(
-              "flex items-center gap-2.5 rounded-full py-2 pr-4 pl-2 text-left transition-all duration-300 hover:-translate-y-0.5",
+              "flex items-center gap-2.5 rounded-full border py-2 pr-4 pl-2 text-left transition-all duration-300 hover:-translate-y-0.5",
               active
-                ? "bg-accent text-accent-fg shadow-[0_8px_20px_-10px_rgb(59_130_246/0.9)]"
-                : "bg-surface text-foreground shadow-card hover:bg-surface-hover",
+                ? "border-accent bg-accent text-accent-fg shadow-[0_10px_28px_-10px_rgba(255,255,255,0.28)]"
+                : "border-line bg-surface text-foreground shadow-card backdrop-blur-xl hover:border-foreground/25 hover:bg-surface-hover",
             )}
           >
             <span
               className={cn(
                 "grid size-8 shrink-0 place-items-center rounded-full transition-colors",
-                active ? "bg-white/20 text-white" : "bg-surface-subtle text-foreground",
+                active ? "bg-accent-fg/12 text-accent-fg" : "bg-surface-subtle text-foreground",
               )}
             >
               <Icon className="size-4" strokeWidth={1.9} />
             </span>
             <span className="truncate text-[13px] font-medium">{action.label}</span>
-          </button>
+          </Link>
         );
       })}
     </div>

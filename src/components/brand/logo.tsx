@@ -11,23 +11,19 @@ type LogoMarkProps = {
 };
 
 /**
- * pagwave mark — a dark fintech tile.
+ * pagwave mark — Obsidian & Champagne Gold liquid payment wave.
  *
- * Layers: near-black navy gradient, a glassy top-left sheen, a hairline accent
- * border that fades towards the bottom-right, and the `N` monogram drawn as
- * vector rectangles (no font dependency) so it stays crisp from a 16px favicon
- * up to a 512px app icon.
- *
- * Every colour comes from a CSS variable, so a light-surface variant is one
- * class away: `style={{ "--logo-from": "#fff" }}`.
+ * Layers: deep obsidian gradient tile, subtle glass sheen, hairline rim,
+ * twin harmonic payment waves flowing upward with a settlement pulse node.
+ * Respects `--logo-from`, `--logo-to`, `--logo-edge`, `--logo-n-from`,
+ * `--logo-n-to` and `--logo-accent` CSS custom properties for light/dark surfaces.
  */
 export function LogoMark({ size = 32, className, radius = 25 }: LogoMarkProps) {
-  // Gradient ids must be unique per instance: the sidebar, nav and footer can
-  // render several marks on the same page.
   const uid = useId();
   const bg = `${uid}-bg`;
   const edge = `${uid}-edge`;
-  const mark = `${uid}-n`;
+  const waveGrad = `${uid}-wave`;
+  const accentGrad = `${uid}-accent`;
   const sheen = `${uid}-sheen`;
   const r = (radius / 100) * 64;
 
@@ -42,47 +38,68 @@ export function LogoMark({ size = 32, className, radius = 25 }: LogoMarkProps) {
     >
       <defs>
         <linearGradient id={bg} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--logo-from, #16213a)" />
-          <stop offset="1" stopColor="var(--logo-to, #05080f)" />
+          <stop offset="0" stopColor="var(--logo-from, #16181f)" />
+          <stop offset="1" stopColor="var(--logo-to, #07080b)" />
         </linearGradient>
 
         <linearGradient id={edge} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--logo-edge, #4c8dff)" stopOpacity="0.55" />
-          <stop offset="0.55" stopColor="var(--logo-edge, #4c8dff)" stopOpacity="0.08" />
-          <stop offset="1" stopColor="var(--logo-edge, #4c8dff)" stopOpacity="0" />
+          <stop offset="0" stopColor="var(--logo-edge, #e2be72)" stopOpacity="0.62" />
+          <stop offset="0.55" stopColor="var(--logo-edge, #e2be72)" stopOpacity="0.16" />
+          <stop offset="1" stopColor="var(--logo-edge, #e2be72)" stopOpacity="0.04" />
         </linearGradient>
 
-        <linearGradient id={mark} x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={waveGrad} x1="0.1" y1="0.2" x2="0.9" y2="0.8">
           <stop offset="0" stopColor="var(--logo-n-from, #ffffff)" />
-          <stop offset="1" stopColor="var(--logo-n-to, #9cc0ff)" />
+          <stop offset="0.6" stopColor="var(--logo-n-to, #f3e3bd)" />
+          <stop offset="1" stopColor="var(--logo-accent, #d4ae5f)" />
         </linearGradient>
 
-        <linearGradient id={sheen} x1="0" y1="0" x2="0.55" y2="1">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.12" />
-          <stop offset="0.5" stopColor="#ffffff" stopOpacity="0" />
+        <linearGradient id={accentGrad} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f5dfa8" />
+          <stop offset="1" stopColor="#c79a43" />
+        </linearGradient>
+
+        <linearGradient id={sheen} x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.14" />
+          <stop offset="0.45" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
 
-      {/* tile */}
+      {/* Tile */}
       <rect width="64" height="64" rx={r} fill={`url(#${bg})`} />
-      <rect x="1" y="1" width="62" height="62" rx={r - 1} fill={`url(#${sheen})`} />
+      <rect x="1" y="1" width="62" height="62" rx={Math.max(r - 1, 2)} fill={`url(#${sheen})`} />
       <rect
         x="1"
         y="1"
         width="62"
         height="62"
-        rx={r - 1}
+        rx={Math.max(r - 1, 2)}
         fill="none"
         stroke={`url(#${edge})`}
-        strokeWidth="2"
+        strokeWidth="1.75"
       />
 
-      {/* N monogram */}
-      <g fill={`url(#${mark})`}>
-        <rect x="16" y="15" width="9" height="34" rx="2.5" />
-        <rect x="39" y="15" width="9" height="34" rx="2.5" />
-        <rect x="27" y="8" width="10" height="48" rx="2.5" transform="rotate(-19 32 32)" />
-      </g>
+      {/* Harmonic secondary flow */}
+      <path
+        d="M 14 44 C 21 34, 27.5 34.5, 33.5 41.5 C 39.5 48.5, 45.5 46.5, 51 36"
+        fill="none"
+        stroke={`url(#${waveGrad})`}
+        strokeOpacity="0.38"
+        strokeWidth="3.2"
+        strokeLinecap="round"
+      />
+
+      {/* Primary liquid wave */}
+      <path
+        d="M 12 36.5 C 18.5 18, 27 18.5, 32.5 31.5 C 38 44.5, 45.5 42.5, 51 23"
+        fill="none"
+        stroke={`url(#${waveGrad})`}
+        strokeWidth="5.4"
+        strokeLinecap="round"
+      />
+
+      {/* Settlement node pulse */}
+      <circle cx="51" cy="23" r="3.6" fill={`url(#${accentGrad})`} />
     </svg>
   );
 }

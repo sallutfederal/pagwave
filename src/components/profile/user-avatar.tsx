@@ -1,7 +1,7 @@
 "use client";
 
+import { useSession } from "@/components/session-provider";
 import { Avatar } from "@/components/ui/avatar";
-import { userProfile } from "@/data/user-profile";
 import { useProfile } from "@/lib/profile-store";
 
 /**
@@ -17,19 +17,11 @@ export function UserAvatar({
   className?: string;
   priority?: boolean;
 }) {
+  const user = useSession();
   const { avatar } = useProfile();
 
-  const data = avatar
-    ? { url: avatar, initials: userProfile.avatar.initials }
-    : userProfile.avatar;
+  // No photo uploaded: the Avatar renders the user's initials.
+  const data = { url: avatar ?? "", initials: user.initials };
 
-  return (
-    <Avatar
-      data={data}
-      name={userProfile.subtitle}
-      size={size}
-      className={className}
-      priority={priority}
-    />
-  );
+  return <Avatar data={data} name={user.name} size={size} className={className} priority={priority} />;
 }

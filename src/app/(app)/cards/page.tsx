@@ -1,14 +1,14 @@
-﻿import type { Metadata } from 'next';
+import type { Metadata } from 'next';
+import Link from 'next/link';
 import { CreditCard } from 'lucide-react';
 
 import { CardLimits } from '@/components/cards/card-limits';
 import { CardRequestDialog } from '@/components/cards/card-request-dialog';
-import { UserCards } from '@/components/cards/user-cards';
+import { FreezeAllButton } from '@/components/cards/freeze-all-button';
 import { BankCardTile } from '@/components/dashboard/bank-card';
 import { PageHeader } from '@/components/layout/page-header';
 import { SectionHeader } from '@/components/dashboard/section-header';
 import { TransactionListItem } from '@/components/shared/transaction-list';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { getCardSettings, getDashboardSummary, getTransactions } from '@/server/dashboard-data';
 
@@ -28,19 +28,13 @@ export default async function CardsPage() {
       <PageHeader
         title="Cards"
         description="Balances, limits and activity of the cards linked to this account."
-        actions={
-          <Button variant="outline">
-            <CreditCard /> Freeze all
-          </Button>
-        }
+        actions={<FreezeAllButton cards={summary.cards} />}
       />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {summary.cards.map(card => (
           <BankCardTile key={card.id} card={card} />
         ))}
-
-        <UserCards />
 
         <CardRequestDialog />
       </div>
@@ -57,9 +51,15 @@ export default async function CardsPage() {
             actionHref="/transactions"
           />
           <div className="space-y-3">
-            {transactions.map(transaction => (
-              <TransactionListItem key={transaction.id} transaction={transaction} showDate />
-            ))}
+            {transactions.length === 0 ? (
+              <Card className="text-muted-foreground p-6 text-center text-xs">
+                No card or wallet activity yet.
+              </Card>
+            ) : (
+              transactions.map(transaction => (
+                <TransactionListItem key={transaction.id} transaction={transaction} showDate />
+              ))
+            )}
           </div>
 
           <Card className="flex items-center gap-4 p-5">
@@ -72,9 +72,12 @@ export default async function CardsPage() {
                 Block a card in one tap — payments stop immediately.
               </p>
             </div>
-            <Button variant="outline" size="sm" className="ml-auto shrink-0">
+            <Link
+              href="/settings"
+              className="border-line bg-surface text-foreground hover:border-foreground/25 hover:bg-surface-hover ml-auto inline-flex h-8 shrink-0 items-center justify-center rounded-full border px-3 text-xs font-medium backdrop-blur-md transition-all"
+            >
               Learn more
-            </Button>
+            </Link>
           </Card>
         </div>
       </div>

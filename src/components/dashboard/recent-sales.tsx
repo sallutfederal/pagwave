@@ -1,8 +1,10 @@
+import { CheckCircle2, Clock, XCircle } from "lucide-react";
+
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { Sale, SaleStatus } from "@/lib/schemas";
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
 
 const statusConfig: Record<SaleStatus, { tone: "success" | "warning" | "danger"; icon: typeof CheckCircle2 }> = {
   Success: { tone: "success", icon: CheckCircle2 },
@@ -11,16 +13,24 @@ const statusConfig: Record<SaleStatus, { tone: "success" | "warning" | "danger";
 };
 
 export function RecentSales({ sales }: { sales: Sale[] }) {
+  if (sales.length === 0) {
+    return (
+      <Card className="border-dashed px-4 py-8 text-center text-xs text-muted-foreground">
+        No sales recorded yet. Merchant checkouts and customer payments will appear here.
+      </Card>
+    );
+  }
+
   return (
-    <section>
-      <div className="text-muted-foreground hidden grid-cols-[minmax(0,1fr)_110px_120px_100px] gap-4 px-1 pb-3 text-[11px] font-medium sm:grid">
+    <Card className="p-4 sm:p-5">
+      <div className="border-line text-muted-foreground hidden grid-cols-[minmax(0,1fr)_110px_120px_100px] gap-4 border-b px-2 pb-3 text-[11px] font-medium sm:grid">
         <span>Customer</span>
         <span>Date</span>
         <span>Status</span>
         <span>Amount</span>
       </div>
 
-      <ul className="space-y-1">
+      <ul className="divide-line divide-y">
         {sales.map((sale) => {
           const status = statusConfig[sale.status];
           const StatusIcon = status.icon;
@@ -28,7 +38,7 @@ export function RecentSales({ sales }: { sales: Sale[] }) {
           return (
             <li
               key={sale.id}
-              className="hover:bg-surface/70 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 rounded-2xl px-1 py-2.5 transition-colors sm:grid-cols-[minmax(0,1fr)_110px_120px_100px]"
+              className="hover:bg-surface-hover/70 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 rounded-xl px-2 py-3 transition-colors sm:grid-cols-[minmax(0,1fr)_110px_120px_100px]"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar data={sale.customer.avatar} name={sale.customer.name} size="sm" />
@@ -60,6 +70,6 @@ export function RecentSales({ sales }: { sales: Sale[] }) {
           );
         })}
       </ul>
-    </section>
+    </Card>
   );
 }

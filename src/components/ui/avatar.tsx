@@ -32,6 +32,8 @@ export function Avatar({ data, name, size = "sm", className, priority = false }:
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const failed = failedSrc === data.url;
   const isDataUrl = data.url.startsWith("data:");
+  // No photo at all (e.g. a transaction, or an account without an upload): initials only.
+  const showInitials = failed || data.url === "";
 
   return (
     <span
@@ -41,7 +43,7 @@ export function Avatar({ data, name, size = "sm", className, priority = false }:
         className,
       )}
     >
-      {failed ? (
+      {showInitials ? (
         <span aria-hidden>{data.initials}</span>
       ) : (
         <Image

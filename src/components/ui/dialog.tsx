@@ -20,7 +20,7 @@ export function DialogContent({
       <DialogPrimitive.Overlay className="bg-rail/40 fixed inset-0 z-50 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0" />
       <DialogPrimitive.Content
         className={cn(
-          "bg-surface text-foreground shadow-float fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-card p-6",
+          "bg-surface border-line text-foreground shadow-float fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-card border p-6 backdrop-blur-2xl",
           "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95",
           className,
         )}

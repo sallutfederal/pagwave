@@ -1,25 +1,52 @@
 "use client";
 
-import { Laptop, LogOut, Moon, ShieldCheck, Sun, SunMoon, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import {
+  CheckCircle2,
+  FileCheck2,
+  KeyRound,
+  LogOut,
+  Moon,
+  Save,
+  ShieldCheck,
+  Sun,
+  SunMoon,
+  Trash2,
+} from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { AvatarUpload } from "@/components/profile/avatar-upload";
+import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { userProfile } from "@/data/user-profile";
-import { saveProfile, useProfile } from "@/lib/profile-store";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
 
 const THEMES = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: SunMoon },
+  { value: "light", label: "Claro", icon: Sun },
+  { value: "dark", label: "Obsidian", icon: Moon },
+  { value: "system", label: "Sistema", icon: SunMoon },
 ] as const;
+
+type KycDoc = {
+  id: string;
+  type: string;
+  status: string;
+  fileUrl: string;
+  reviewNote?: string | null;
+  createdAt: string;
+};
 
 function SettingsCard({
   title,
@@ -39,100 +66,379 @@ function SettingsCard({
   );
 }
 
-function ToggleRow({
-  label,
-  description,
-  initial,
-}: {
-  label: string;
-  description: string;
-  initial: boolean;
-}) {
-  const [checked, setChecked] = useState(initial);
-
-  return (
-    <div className="flex items-center gap-4 border-line border-b py-3 last:border-b-0 last:pb-0 first:pt-0">
-      <div className="min-w-0 flex-1">
-        <p className="text-foreground text-sm font-medium">{label}</p>
-        <p className="text-muted-foreground text-xs">{description}</p>
-      </div>
-      <Switch checked={checked} onCheckedChange={setChecked} label={label} />
-    </div>
-  );
-}
-
 export function SettingsView() {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const hydrated = useHydrated();
-  const profile = useProfile();
+  const user = useSession();
+
+  // Profile + notifications state loaded from PostgreSQL
+  const [displayName, setDisplayName] = useState(user.name);
+  const [phone, setPhone] = useState("");
+  const [country, setCountry] = useState("BRA");
+  const [companyName, setCompanyName] = useState("");
+  const [companyTaxId, setCompanyTaxId] = useState("");
+  const [prefs, setPrefs] = useState({
+    paymentAlerts: true,
+    weeklyDigest: true,
+    productRenewals: false,
+    securityNotices: true,
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileNotice, setProfileNotice] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // KYC state
+  const [kycStatus, setKycStatus] = useState(user.kycStatus);
+  const [kycLevel, setKycLevel] = useState(user.kycLevel);
+  const [kycDocs, setKycDocs] = useState<KycDoc[]>([]);
+  const [kycType, setKycType] = useState("IDENTITY_FRONT");
+  const [kycDocNumber, setKycDocNumber] = useState("");
+  const [kycFileRef, setKycFileRef] = useState("");
+  const [submittingKyc, setSubmittingKyc] = useState(false);
+  const [kycMsg, setKycMsg] = useState<string | null>(null);
+
+  // Security panels
+  const [showPwdForm, setShowPwdForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [show2faPanel, setShow2faPanel] = useState(false);
+  const [twoFaSecret, setTwoFaSecret] = useState<string | null>(null);
+  const [twoFaUri, setTwoFaUri] = useState<string | null>(null);
+  const [twoFaCode, setTwoFaCode] = useState("");
+  const [disable2faPwd, setDisable2faPwd] = useState("");
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [securityMsg, setSecurityMsg] = useState<string | null>(null);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [securityBusy, setSecurityBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const [profRes, kycRes] = await Promise.allSettled([
+        fetch("/api/auth/profile", { cache: "no-store" }),
+        fetch("/api/auth/kyc", { cache: "no-store" }),
+      ]);
+      if (cancelled) return;
+
+      if (profRes.status === "fulfilled" && profRes.value.ok) {
+        const j = (await profRes.value.json().catch(() => null)) as {
+          profile?: {
+            displayName?: string | null;
+            phone?: string | null;
+            country?: string | null;
+            companyName?: string | null;
+            companyTaxId?: string | null;
+          } | null;
+          preferences?: Partial<typeof prefs>;
+        } | null;
+        if (!cancelled && j) {
+          if (j.profile?.displayName) setDisplayName(j.profile.displayName);
+          if (j.profile?.phone) setPhone(j.profile.phone);
+          if (j.profile?.country) setCountry(j.profile.country);
+          if (j.profile?.companyName) setCompanyName(j.profile.companyName);
+          if (j.profile?.companyTaxId) setCompanyTaxId(j.profile.companyTaxId);
+          if (j.preferences) {
+            setPrefs((prev) => ({ ...prev, ...j.preferences }));
+          }
+        }
+      }
+
+      if (kycRes.status === "fulfilled" && kycRes.value.ok) {
+        const k = (await kycRes.value.json().catch(() => null)) as {
+          kycStatus?: string;
+          kycLevel?: number;
+          documents?: KycDoc[];
+        } | null;
+        if (!cancelled && k) {
+          if (k.kycStatus) setKycStatus(k.kycStatus);
+          if (k.kycLevel !== undefined) setKycLevel(k.kycLevel);
+          if (k.documents) setKycDocs(k.documents);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function saveProfileAndPrefs() {
+    setSavingProfile(true);
+    setProfileNotice(null);
+    setProfileError(null);
+    try {
+      const parts = displayName.trim().split(/\s+/);
+      const firstName = parts[0] || displayName.trim();
+      const lastName = parts.slice(1).join(" ");
+
+      const res = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          displayName: displayName.trim(),
+          phone: phone.trim(),
+          country: country.trim(),
+          companyName: companyName.trim(),
+          companyTaxId: companyTaxId.trim(),
+          preferences: prefs,
+        }),
+      });
+      const json = (await res.json()) as { ok?: boolean; message?: string };
+      if (!res.ok || !json.ok) {
+        setProfileError(json.message || "Não foi possível salvar perfil.");
+        return;
+      }
+      setProfileNotice("Perfil e preferências salvos no banco com sucesso.");
+      router.refresh();
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function handleSubmitKyc(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmittingKyc(true);
+    setKycMsg(null);
+    setProfileError(null);
+    try {
+      const res = await fetch("/api/auth/kyc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: kycType,
+          fileUrl: kycFileRef.trim(),
+          documentNumber: kycDocNumber.trim() || undefined,
+        }),
+      });
+      const json = (await res.json()) as { document?: KycDoc; message?: string };
+      if (!res.ok || !json.document) {
+        setProfileError(json.message || "Falha ao enviar documento KYC.");
+        return;
+      }
+      setKycDocs((prev) => [json.document!, ...prev]);
+      setKycStatus("PENDING");
+      setKycDocNumber("");
+      setKycFileRef("");
+      setKycMsg("Documento enviado para análise na fila de compliance (/admin/users).");
+      router.refresh();
+    } finally {
+      setSubmittingKyc(false);
+    }
+  }
+
+  async function runSecurity(body: Record<string, unknown>, onOk?: (json: Record<string, unknown>) => void) {
+    setSecurityBusy(true);
+    setSecurityMsg(null);
+    setSecurityError(null);
+    try {
+      const res = await fetch("/api/auth/security", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = (await res.json()) as Record<string, unknown>;
+      if (!res.ok) {
+        setSecurityError(String(json.message || "Erro na operação de segurança."));
+        return;
+      }
+      onOk?.(json);
+    } finally {
+      setSecurityBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
-        description="Profile, appearance, notifications and security for this account."
-        actions={<Button>Save changes</Button>}
+        title="Configurações"
+        description="Perfil, verificação KYC, aparência, notificações e segurança desta conta."
+        actions={
+          <Button type="button" disabled={savingProfile} onClick={() => void saveProfileAndPrefs()}>
+            <Save className="size-4" />
+            {savingProfile ? "Salvando..." : "Salvar alterações"}
+          </Button>
+        }
       />
+
+      {profileNotice ? (
+        <Card className="border-emerald-400/30 bg-emerald-500/10 p-4 text-xs text-emerald-200">
+          {profileNotice}
+        </Card>
+      ) : null}
+
+      {profileError ? (
+        <Card className="border-red-500/30 bg-red-500/10 p-4 text-xs text-red-200">
+          {profileError}
+        </Card>
+      ) : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-12">
         <div className="space-y-6 xl:col-span-7">
           <AvatarUpload />
 
           <SettingsCard
-            title="Profile"
-            description="Shown in the topbar, on statements and in shared reports."
+            title="Perfil & Dados Cadastrais"
+            description="Edite o nome exibido, telefone e dados empresariais salvos na sua conta."
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-1.5">
-                <span className="text-muted-foreground text-xs">Full name</span>
+                <span className="text-muted-foreground text-xs">Nome de exibição</span>
                 <Input
-                  value={profile.name}
-                  onChange={(event) => saveProfile({ name: event.target.value })}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
                 />
               </label>
               <label className="space-y-1.5">
-                <span className="text-muted-foreground text-xs">E-mail</span>
+                <span className="text-muted-foreground text-xs">E-mail (identificador)</span>
+                <Input type="email" value={user.email} readOnly />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs">Telefone</span>
                 <Input
-                  type="email"
-                  value={profile.email}
-                  onChange={(event) => saveProfile({ email: event.target.value })}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+55 11 99999-8888"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs">País (ISO-3)</span>
+                <Input
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value.toUpperCase())}
+                  maxLength={3}
+                  placeholder="BRA"
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs">Empresa (opcional)</span>
+                <Input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  placeholder="Pagwave Ltda."
+                />
+              </label>
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs">CNPJ / Tax ID (opcional)</span>
+                <Input
+                  value={companyTaxId}
+                  onChange={(e) => setCompanyTaxId(e.target.value)}
+                  placeholder="00.000.000/0001-00"
                 />
               </label>
             </div>
-            <div className="border-line mt-4 flex items-center gap-3 border-t pt-4">
-              <Laptop className="text-muted-foreground size-4" />
-              <p className="text-muted-foreground text-xs">
-                Changes are saved instantly on this device · {userProfile.subtitle.toLowerCase()}
-              </p>
-            </div>
           </SettingsCard>
 
-          <SettingsCard title="Notifications" description="Choose what pagwave sends you.">
-            <ToggleRow
-              label="Payment alerts"
-              description="Every card payment above $100"
-              initial
-            />
-            <ToggleRow
-              label="Weekly digest"
-              description="Spending summary every Monday morning"
-              initial
-            />
-            <ToggleRow
-              label="Product renewals"
-              description="Reminder 3 days before a subscription renews"
-              initial={false}
-            />
-            <ToggleRow
-              label="Security notices"
-              description="New device sign-ins and password changes"
-              initial
-            />
+          <SettingsCard
+            title="Verificação de Identidade (KYC)"
+            description={`Status atual: ${kycStatus} · Nível ${kycLevel}/3. Envie documentos para desbloquear limites maiores.`}
+          >
+            <form onSubmit={handleSubmitKyc} className="space-y-3.5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <span className="text-muted-foreground mb-1.5 block text-xs">Tipo de documento</span>
+                  <Select value={kycType} onValueChange={setKycType}>
+                    <SelectTrigger className="bg-surface-subtle border-line h-10 w-full rounded-xl px-3 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="IDENTITY_FRONT">RG / CNH (Frente)</SelectItem>
+                      <SelectItem value="IDENTITY_BACK">RG / CNH (Verso)</SelectItem>
+                      <SelectItem value="PASSPORT">Passaporte</SelectItem>
+                      <SelectItem value="SELFIE">Selfie com documento</SelectItem>
+                      <SelectItem value="PROOF_OF_ADDRESS">Comprovante de residência</SelectItem>
+                      <SelectItem value="CORPORATE_REGISTRATION">Contrato Social / CNPJ</SelectItem>
+                      <SelectItem value="TAX_ID">Comprovante Fiscal</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <span className="text-muted-foreground mb-1.5 block text-xs">Número do documento</span>
+                  <Input
+                    value={kycDocNumber}
+                    onChange={(e) => setKycDocNumber(e.target.value)}
+                    placeholder="CPF / CNPJ / Passaporte"
+                  />
+                </div>
+                <div>
+                  <span className="text-muted-foreground mb-1.5 block text-xs">URL / Referência do arquivo</span>
+                  <Input
+                    value={kycFileRef}
+                    onChange={(e) => setKycFileRef(e.target.value)}
+                    placeholder="https://docs.../cnh-frente.pdf"
+                    required
+                  />
+                </div>
+              </div>
+
+              {kycMsg ? (
+                <p className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  {kycMsg}
+                </p>
+              ) : null}
+
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-muted-foreground text-xs">
+                  {kycDocs.length} documento(s) enviado(s)
+                </p>
+                <Button type="submit" size="sm" variant="outline" disabled={submittingKyc}>
+                  <FileCheck2 className="size-3.5" />
+                  {submittingKyc ? "Enviando..." : "Enviar documento KYC"}
+                </Button>
+              </div>
+            </form>
+          </SettingsCard>
+
+          <SettingsCard title="Notificações" description="Escolha os alertas persistidos na sua conta.">
+            {(
+              [
+                {
+                  key: "paymentAlerts",
+                  label: "Alertas de pagamento",
+                  desc: "Notificar a cada pagamento recebido ou saque processado",
+                },
+                {
+                  key: "weeklyDigest",
+                  label: "Resumo semanal",
+                  desc: "Relatório consolidado de movimentações às segundas-feiras",
+                },
+                {
+                  key: "productRenewals",
+                  label: "Avisos de API e webhooks",
+                  desc: "Alertas caso sua URL de webhook falhe consecutivamente",
+                },
+                {
+                  key: "securityNotices",
+                  label: "Alertas de segurança",
+                  desc: "Novos logins, alterações de senha e rotação de chaves",
+                },
+              ] as const
+            ).map((row) => (
+              <div
+                key={row.key}
+                className="flex items-center gap-4 border-line border-b py-3 last:border-b-0 last:pb-0 first:pt-0"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-foreground text-sm font-medium">{row.label}</p>
+                  <p className="text-muted-foreground text-xs">{row.desc}</p>
+                </div>
+                <Switch
+                  checked={prefs[row.key]}
+                  onCheckedChange={(checked) =>
+                    setPrefs((prev) => ({ ...prev, [row.key]: checked }))
+                  }
+                  label={row.label}
+                />
+              </div>
+            ))}
           </SettingsCard>
         </div>
 
         <div className="space-y-6 xl:col-span-5">
-          <SettingsCard title="Appearance" description="Pick the theme used across the dashboard.">
+          <SettingsCard title="Aparência" description="Tema aplicado em todo o painel.">
             <div className="grid grid-cols-3 gap-2">
               {THEMES.map((option) => {
                 const Icon = option.icon;
@@ -159,33 +465,244 @@ export function SettingsView() {
             </div>
           </SettingsCard>
 
-          <SettingsCard title="Security" description="Protect access to your money.">
-            <div className="flex items-center gap-4 border-line border-b pb-3">
-              <ShieldCheck className="text-success size-5 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-foreground text-sm font-medium">Two-factor authentication</p>
-                <p className="text-muted-foreground text-xs">Authenticator app · enabled</p>
+          <SettingsCard title="Segurança & 2FA" description="Proteja o acesso ao seu saldo e API.">
+            {securityMsg ? (
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+                <CheckCircle2 className="size-4 shrink-0" />
+                {securityMsg}
               </div>
-              <Button variant="outline" size="sm">
-                Manage
-              </Button>
-            </div>
-            <div className="flex items-center gap-4 pt-3">
-              <p className="text-foreground min-w-0 flex-1 text-sm font-medium">Change password</p>
-              <Button variant="outline" size="sm">
-                Update
-              </Button>
+            ) : null}
+
+            {securityError ? (
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+                {securityError}
+              </div>
+            ) : null}
+
+            <div className="space-y-4">
+              <div className="flex items-center gap-4 border-line border-b pb-3">
+                <ShieldCheck
+                  className={cn(
+                    "size-5 shrink-0",
+                    user.twoFactorEnabled ? "text-success" : "text-muted-foreground",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-foreground text-sm font-medium">Autenticação em 2 etapas (2FA)</p>
+                  <p className="text-muted-foreground text-xs">
+                    {user.twoFactorEnabled ? "App autenticador ativo" : "Não ativado ainda"}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShow2faPanel((v) => !v);
+                    if (!user.twoFactorEnabled && !twoFaSecret) {
+                      void runSecurity({ action: "2fa-setup" }, (res) => {
+                        setTwoFaSecret(String(res.secret || ""));
+                        setTwoFaUri(String(res.otpauthUri || res.qrCodeUrl || ""));
+                      });
+                    }
+                  }}
+                >
+                  {show2faPanel ? "Fechar" : user.twoFactorEnabled ? "Gerenciar" : "Ativar 2FA"}
+                </Button>
+              </div>
+
+              {show2faPanel ? (
+                <div className="border-line bg-surface-subtle space-y-3 rounded-xl border p-3.5 text-xs">
+                  {user.twoFactorEnabled ? (
+                    <>
+                      <p className="text-muted-foreground">
+                        Informe sua senha atual para desativar o 2FA desta conta.
+                      </p>
+                      <div className="flex gap-2">
+                        <Input
+                          type="password"
+                          value={disable2faPwd}
+                          onChange={(e) => setDisable2faPwd(e.target.value)}
+                          placeholder="Senha atual"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={securityBusy || !disable2faPwd}
+                          onClick={() =>
+                            void runSecurity(
+                              { action: "2fa-disable", password: disable2faPwd },
+                              () => {
+                                setSecurityMsg("2FA desativado.");
+                                setShow2faPanel(false);
+                                setDisable2faPwd("");
+                                router.refresh();
+                              },
+                            )
+                          }
+                        >
+                          Desativar
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {twoFaSecret ? (
+                        <div className="space-y-1.5">
+                          <p className="text-muted-foreground">
+                            Adicione esta chave manual ao seu Google Authenticator / Authy:
+                          </p>
+                          <p className="text-foreground break-all rounded-lg bg-black/30 p-2 font-mono">
+                            {twoFaSecret}
+                          </p>
+                          {twoFaUri ? (
+                            <p className="text-muted-foreground break-all font-mono text-[10px]">
+                              {twoFaUri}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <div className="flex gap-2">
+                        <Input
+                          value={twoFaCode}
+                          onChange={(e) => setTwoFaCode(e.target.value)}
+                          placeholder="Código de 6 dígitos"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={securityBusy || twoFaCode.length < 6}
+                          onClick={() =>
+                            void runSecurity(
+                              { action: "2fa-confirm", code: twoFaCode },
+                              () => {
+                                setSecurityMsg("2FA ativado com sucesso.");
+                                setShow2faPanel(false);
+                                setTwoFaCode("");
+                                router.refresh();
+                              },
+                            )
+                          }
+                        >
+                          Confirmar
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-4">
+                <KeyRound className="text-muted-foreground size-5 shrink-0" />
+                <p className="text-foreground min-w-0 flex-1 text-sm font-medium">Alterar senha</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowPwdForm((v) => !v)}
+                >
+                  {showPwdForm ? "Cancelar" : "Atualizar"}
+                </Button>
+              </div>
+
+              {showPwdForm ? (
+                <div className="border-line bg-surface-subtle space-y-2.5 rounded-xl border p-3.5">
+                  <Input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Senha atual"
+                  />
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Nova senha (mín. 8 caracteres)"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={securityBusy || !currentPassword || newPassword.length < 8}
+                    onClick={() =>
+                      void runSecurity(
+                        {
+                          action: "change-password",
+                          currentPassword,
+                          newPassword,
+                        },
+                        () => {
+                          setSecurityMsg("Senha alterada com sucesso.");
+                          setCurrentPassword("");
+                          setNewPassword("");
+                          setShowPwdForm(false);
+                        },
+                      )
+                    }
+                  >
+                    Salvar nova senha
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </SettingsCard>
 
-          <SettingsCard title="Danger zone" description="Actions that cannot be undone.">
+          <SettingsCard title="Zona de Risco" description="Encerrar sessões ativas ou fechar a conta.">
             <div className="space-y-3">
-              <Button variant="outline" className="w-full justify-start">
-                <LogOut /> Sign out of all devices
+              <Button
+                type="button"
+                variant="outline"
+                disabled={securityBusy}
+                onClick={() =>
+                  void runSecurity({ action: "logout-all" }, () => {
+                    router.replace("/login");
+                    router.refresh();
+                  })
+                }
+                className="w-full justify-start"
+              >
+                <LogOut /> Sair de todos os dispositivos
               </Button>
-              <Button variant="outline" className="text-danger hover:text-danger w-full justify-start">
-                <Trash2 /> Delete account
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowDeleteForm((v) => !v)}
+                className="text-danger hover:text-danger w-full justify-start"
+              >
+                <Trash2 /> Excluir conta permanentemente
               </Button>
+
+              {showDeleteForm ? (
+                <div className="border-red-500/30 bg-red-500/10 space-y-2.5 rounded-xl border p-3.5">
+                  <p className="text-xs text-red-200">
+                    Confirme sua senha para desativar e encerrar esta conta:
+                  </p>
+                  <Input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Sua senha atual"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={securityBusy || !deletePassword}
+                    onClick={() =>
+                      void runSecurity(
+                        { action: "delete-account", password: deletePassword },
+                        () => {
+                          router.replace("/login");
+                          router.refresh();
+                        },
+                      )
+                    }
+                    className="bg-red-600 text-white hover:bg-red-500"
+                  >
+                    Confirmar encerramento da conta
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </SettingsCard>
         </div>

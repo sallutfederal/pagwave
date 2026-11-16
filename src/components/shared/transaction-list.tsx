@@ -13,7 +13,7 @@ export function TransactionListItem({
   showDate?: boolean;
 }) {
   return (
-    <Card className="flex items-center gap-3 p-4">
+    <Card className="flex items-center gap-3 p-4 transition-all duration-200 hover:-translate-y-[1px] hover:border-foreground/20">
       <Avatar data={transaction.avatar} name={transaction.title} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
@@ -34,9 +34,10 @@ export function TransactionListItem({
               : "text-foreground text-[13px] font-semibold tabular-nums"
           }
         >
+          {transaction.direction === "in" ? "+" : ""}
           {formatCurrency(
-            { amount: transaction.amount, currency: transaction.currency, fractionDigits: 0 },
-            { showSymbol: false, useGrouping: false },
+            { amount: transaction.amount, currency: transaction.currency, fractionDigits: 2 },
+            { signBeforeSymbol: true },
           )}
         </span>
         <Badge tone={statusTone(transaction.status)} className="px-2 py-0.5 text-[10px]">
@@ -48,6 +49,14 @@ export function TransactionListItem({
 }
 
 export function TransactionsList({ transactions }: { transactions: Transaction[] }) {
+  if (transactions.length === 0) {
+    return (
+      <Card className="text-muted-foreground p-6 text-center text-xs">
+        No transactions yet. Deposits, transfers and card activity will show up here.
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {transactions.map((transaction) => (

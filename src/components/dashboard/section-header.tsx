@@ -12,15 +12,17 @@ type SectionHeaderProps = {
 export function SectionHeader({
   title,
   actionLabel = "See all",
-  actionHref = "#",
+  actionHref,
   className,
 }: SectionHeaderProps) {
   return (
     <div className={cn("flex items-center justify-between gap-4", className)}>
       <h2 className="text-foreground text-[15px] font-semibold">{title}</h2>
-      <Link href={actionHref} className="text-muted-foreground hover:text-foreground text-xs font-medium">
-        {actionLabel}
-      </Link>
+      {actionHref ? (
+        <Link href={actionHref} className="text-muted-foreground hover:text-foreground text-xs font-medium">
+          {actionLabel}
+        </Link>
+      ) : null}
     </div>
   );
 }

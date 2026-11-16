@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 
-import { Architecture } from "@/components/landing/architecture";
+import { CardsAndScale } from "@/components/landing/cards-and-scale";
+import { ComparisonSection } from "@/components/landing/comparison-section";
 import { Cta } from "@/components/landing/cta";
-import { Features } from "@/components/landing/features";
 import { Hero } from "@/components/landing/hero";
-import { Marquee } from "@/components/landing/marquee";
-import { Showcase } from "@/components/landing/showcase";
-import { StackGrid } from "@/components/landing/stack-grid";
-import { Stats } from "@/components/landing/stats";
+import { MarketsSection } from "@/components/landing/markets-section";
+import { PlatformBento } from "@/components/landing/platform-bento";
+import { ProblemSection } from "@/components/landing/problem-section";
+import { TransparencySection } from "@/components/landing/transparency-section";
 import { landingCopy } from "@/lib/landing-copy";
 
 export const metadata: Metadata = {
@@ -27,12 +27,12 @@ export default function LandingPage() {
   return (
     <>
       <Hero />
-      <Marquee />
-      <Stats />
-      <Features />
-      <Showcase />
-      <Architecture />
-      <StackGrid />
+      <ProblemSection />
+      <PlatformBento />
+      <MarketsSection />
+      <ComparisonSection />
+      <CardsAndScale />
+      <TransparencySection />
       <Cta />
     </>
   );

@@ -11,7 +11,13 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
       id: string;
       email: string;
       role: string;
+      type?: string;
     }>();
+
+    // Refresh tokens share the signing secret; they must never act as access tokens.
+    if (payload.type === "refresh") {
+      throw new Error("Refresh token used as access token");
+    }
 
     // Attach user to request for downstream handlers
     request.user = payload;
@@ -51,6 +57,6 @@ export function kycGuard(requiredLevel: number) {
     const user = request.user as { id: string };
     // KYC level is checked at the service layer for actual enforcement
     // This middleware sets the requirement on the request context
-    (request as any).requiredKycLevel = requiredLevel;
+    (request as FastifyRequest & { requiredKycLevel?: number }).requiredKycLevel = requiredLevel;
   };
 }

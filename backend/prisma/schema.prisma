@@ -202,6 +202,7 @@ model User {
 
   // Relations
   profile        UserProfile?
+  preferences    UserPreference?
   sessions       Session[]
   wallets        Wallet[]
   cards          Card[]
@@ -210,6 +211,10 @@ model User {
   auditLogs      AuditLog[]
   apiKeys        ApiKey[]
   beneficiaries  Beneficiary[]
+  savedPayoutKeys SavedPayoutKey[]
+  gatewayCredential GatewayCredential?
+  gatewayActivities GatewayActivity[]
+  gatewayApiLogs GatewayApiLog[]
 
   @@index([email])
   @@index([status])
@@ -701,4 +706,142 @@ model WithdrawalLimit {
 
   @@unique([kycLevel, currencyCode])
   @@map("withdrawal_limits")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER PREFERENCES, GATEWAY CREDENTIALS, XPAG LEDGER & PLATFORM SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model UserPreference {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  paymentAlerts   Boolean  @default(true) @map("payment_alerts")
+  weeklyDigest    Boolean  @default(true) @map("weekly_digest")
+  productRenewals Boolean  @default(false) @map("product_renewals")
+  securityNotices Boolean  @default(true) @map("security_notices")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model SavedPayoutKey {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  label     String   @db.VarChar(100)
+  currency  String   @db.VarChar(10)
+  rail      String   @db.VarChar(40)
+  summary   String   @db.VarChar(255)
+  details   Json     @db.JsonB
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, currency])
+  @@map("saved_payout_keys")
+}
+
+model GatewayCredential {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @unique @map("user_id") @db.Uuid
+  label           String    @db.VarChar(100)
+  clientId        String    @unique @map("client_id") @db.VarChar(80)
+  secretHash      String    @map("secret_hash") @db.VarChar(128)
+  secretEncrypted String    @map("secret_encrypted") @db.VarChar(512)
+  secretPreview   String    @map("secret_preview") @db.VarChar(64)
+  webhookUrl      String?   @map("webhook_url") @db.VarChar(500)
+  requestCount    Int       @default(0) @map("request_count")
+  lastUsedAt      DateTime? @map("last_used_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("gateway_credentials")
+}
+
+model GatewayActivity {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  kind               String   @db.VarChar(30) // cashin | cashout | conversion | med
+  currency           String   @db.VarChar(10)
+  toCurrency         String?  @map("to_currency") @db.VarChar(10)
+  amount             Decimal? @db.Decimal(24, 8)
+  convertedAmount    Decimal? @map("converted_amount") @db.Decimal(24, 8)
+  feeAmount          Decimal? @map("fee_amount") @db.Decimal(24, 8)
+  rail               String?  @db.VarChar(40)
+  status             String   @db.VarChar(40)
+  externalId         String?  @map("external_id") @db.VarChar(150)
+  transactionId      String?  @map("transaction_id") @db.VarChar(150)
+  requestNumber      String?  @map("request_number") @db.VarChar(150)
+  e2e                String?  @db.VarChar(150)
+  origin             String?  @db.VarChar(40)
+  destinationSummary String?  @map("destination_summary") @db.VarChar(255)
+  metadata           Json?    @db.JsonB
+  settledInLedger    Boolean  @default(false) @map("settled_in_ledger")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([externalId])
+  @@index([requestNumber])
+  @@index([transactionId])
+  @@map("gateway_activities")
+}
+
+model GatewayWebhookEvent {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dedupKey          String   @unique @map("dedup_key") @db.VarChar(255)
+  type              String   @db.VarChar(50)
+  status            String   @db.VarChar(50)
+  currency          String?  @db.VarChar(10)
+  amount            Decimal? @db.Decimal(24, 8)
+  e2e               String?  @db.VarChar(150)
+  externalId        String?  @map("external_id") @db.VarChar(150)
+  transactionId     String?  @map("transaction_id") @db.VarChar(150)
+  requestNumber     String?  @map("request_number") @db.VarChar(150)
+  origin            String?  @db.VarChar(40)
+  verifiedSignature Boolean  @default(true) @map("verified_signature")
+  payload           Json     @db.JsonB
+  receivedAt        DateTime @default(now()) @map("received_at")
+
+  @@index([receivedAt])
+  @@map("gateway_webhook_events")
+}
+
+model GatewayApiLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  clientId   String   @map("client_id") @db.VarChar(80)
+  method     String   @db.VarChar(12)
+  endpoint   String   @db.VarChar(120)
+  currency   String?  @db.VarChar(10)
+  statusCode Int      @map("status_code")
+  ok         Boolean
+  errorCode  String?  @map("error_code") @db.VarChar(80)
+  latencyMs  Int      @map("latency_ms")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("gateway_api_logs")
+}
+
+model PlatformSetting {
+  id                 String   @id @default("default") @db.VarChar(32)
+  environmentMode    String   @default("auto") @map("environment_mode") @db.VarChar(24)
+  feeBps             Int      @default(90) @map("fee_bps")
+  disabledCurrencies Json     @default("[]") @map("disabled_currencies") @db.JsonB
+  maintenanceNotice  String   @default("") @map("maintenance_notice") @db.VarChar(300)
+  globalWebhookUrl   String   @default("") @map("global_webhook_url") @db.VarChar(500)
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("platform_settings")
 }

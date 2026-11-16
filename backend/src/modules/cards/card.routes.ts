@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { randomInt } from "node:crypto";
 import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
@@ -35,7 +36,8 @@ export async function cardRoutes(app: FastifyInstance) {
     const user = request.user as { id: string };
 
     const cards = await prisma.card.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, status: { not: "CANCELLED" } },
+      include: { _count: { select: { transactions: true } } },
       orderBy: { createdAt: "desc" },
     });
 
@@ -50,6 +52,8 @@ export async function cardRoutes(app: FastifyInstance) {
       expiry: `${String(c.expiryMonth).padStart(2, "0")}/${String(c.expiryYear).slice(-2)}`,
       holderName: c.holderName,
       currencyCode: c.currencyCode,
+      transactionCount: c._count.transactions,
+      linkedWalletId: c.linkedWalletId,
       dailyLimit: c.dailyLimit.toString(),
       monthlyLimit: c.monthlyLimit.toString(),
       dailySpent: c.dailySpent.toString(),
@@ -57,6 +61,8 @@ export async function cardRoutes(app: FastifyInstance) {
       onlineEnabled: c.onlineEnabled,
       contactless: c.contactless,
       internationalEnabled: c.internationalEnabled,
+      frozenAt: c.frozenAt?.toISOString() ?? null,
+      activatedAt: c.activatedAt?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
     }));
   });
@@ -120,10 +126,28 @@ export async function cardRoutes(app: FastifyInstance) {
     const body = createCardSchema.parse(request.body);
 
     // Generate virtual card details
-    const last4 = String(Math.floor(1000 + Math.random() * 9000));
+    const last4 = String(randomInt(1000, 10000));
     const now = new Date();
     const expiryMonth = now.getMonth() + 1;
     const expiryYear = now.getFullYear() + 4; // 4 year validity
+
+    // A card spends from a wallet. Never trust a client-supplied wallet id:
+    // it must belong to the caller. Without one, use the wallet of the card currency.
+    const linkedWallet = body.linkedWalletId
+      ? await prisma.wallet.findFirst({
+          where: { id: body.linkedWalletId, userId: user.id, isActive: true },
+        })
+      : await prisma.wallet.findFirst({
+          where: { userId: user.id, isActive: true, type: "FIAT", currency: { code: body.currencyCode } },
+        });
+
+    if (!linkedWallet) {
+      throw new BadRequestError(
+        body.linkedWalletId
+          ? "Linked wallet not found."
+          : `You need a ${body.currencyCode} wallet before issuing a ${body.currencyCode} card.`,
+      );
+    }
 
     const card = await prisma.card.create({
       data: {
@@ -139,7 +163,7 @@ export async function cardRoutes(app: FastifyInstance) {
         currencyCode: body.currencyCode,
         dailyLimit: body.dailyLimit,
         monthlyLimit: body.monthlyLimit,
-        linkedWalletId: body.linkedWalletId ?? null,
+        linkedWalletId: linkedWallet.id,
         status: body.type === "VIRTUAL" ? "ACTIVE" : "PENDING_ACTIVATION",
         activatedAt: body.type === "VIRTUAL" ? new Date() : null,
       },
@@ -161,6 +185,7 @@ export async function cardRoutes(app: FastifyInstance) {
       status: card.status,
       brand: card.brand,
       variant: card.variant,
+      label: card.label,
       last4: card.last4,
       expiry: `${String(expiryMonth).padStart(2, "0")}/${String(expiryYear).slice(-2)}`,
       holderName: card.holderName,

@@ -1,11 +1,14 @@
 import {
+  Activity,
   ArrowLeftRight,
+  CreditCard,
+  KeyRound,
   LayoutGrid,
   LogOut,
-  MessageSquare,
-  Package,
-  Settings,
-  Users,
+  Plug,
+  Shield,
+  Sliders,
+  UserCog,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -18,14 +21,21 @@ export type NavItem = {
 
 export const mainNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
-  { href: "/cards", label: "Cards", icon: Wallet },
+  { href: "/wallet", label: "Wallet", icon: Wallet },
+  { href: "/cards", label: "Cards", icon: CreditCard },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/products", label: "Products", icon: Package },
-  { href: "/customers", label: "Customers", icon: Users },
 ];
 
 export const secondaryNav: NavItem[] = [
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/integrations", label: "Integrações", icon: Plug },
+];
+
+export const adminNav: NavItem[] = [
+  { href: "/admin", label: "Admin · Visão Geral", icon: Shield },
+  { href: "/admin/users", label: "Admin · Usuários & KYC", icon: UserCog },
+  { href: "/admin/transactions", label: "Admin · Transações & MED", icon: Activity },
+  { href: "/admin/integrations", label: "Admin · API Keys & Webhooks", icon: KeyRound },
+  { href: "/admin/settings", label: "Admin · Configurações & Moedas", icon: Sliders },
 ];
 
 export const logoutItem: NavItem = { href: "#", label: "Log out", icon: LogOut };

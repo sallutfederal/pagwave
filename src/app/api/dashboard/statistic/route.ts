@@ -1,3 +1,4 @@
+import { privateJson } from "@/server/api";
 import { getStatistic, parsePeriod } from "@/server/dashboard-data";
 
 /**
@@ -10,7 +11,5 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const period = parsePeriod(searchParams.get("period"));
 
-  const statistic = await getStatistic(period);
-
-  return Response.json(statistic);
+  return privateJson(() => getStatistic(period));
 }

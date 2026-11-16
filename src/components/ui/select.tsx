@@ -18,7 +18,7 @@ export function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "bg-surface-subtle text-muted-foreground hover:text-foreground flex h-9 items-center gap-2 rounded-full px-3.5 text-xs font-medium transition-colors outline-none",
+        "bg-surface-subtle border-line text-muted-foreground hover:border-foreground/20 hover:text-foreground flex h-9 items-center gap-2 rounded-full border px-3.5 text-xs font-medium transition-colors outline-none",
         "data-[state=open]:text-foreground [&_svg]:size-3.5",
         className,
       )}
@@ -43,7 +43,7 @@ export function SelectContent({
       <SelectPrimitive.Content
         position={position}
         className={cn(
-          "bg-surface text-foreground shadow-float border-line z-50 overflow-hidden rounded-inner border p-1.5",
+          "bg-surface text-foreground shadow-float border-line z-50 overflow-hidden rounded-inner border p-1.5 backdrop-blur-2xl",
           position === "popper" && "w-[var(--radix-select-trigger-width)]",
           className,
         )}

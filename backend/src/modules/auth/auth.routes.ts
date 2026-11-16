@@ -1,6 +1,11 @@
 import type { FastifyInstance } from "fastify";
+import bcrypt from "bcryptjs";
+import { z } from "zod";
 
+import { prisma } from "../../config/database.js";
+import { BadRequestError, UnauthorizedError } from "../../lib/errors.js";
 import { authGuard } from "../../middleware/auth.js";
+import { generateId } from "../../lib/id.js";
 import {
   changePasswordSchema,
   enable2FASchema,
@@ -21,15 +26,41 @@ import {
   loginUser,
   registerUser,
   requestPasswordReset,
+  resendVerificationEmail,
   resetPassword,
   setup2FA,
   validateRefreshToken,
   verifyEmail,
 } from "./auth.service.js";
 
+/** Credential endpoints are brute-force targets: much tighter than the global limit. */
+const strictLimit = { max: 10, timeWindow: "1 minute" };
+
+/**
+ * Signs an access/refresh token pair. The refresh token carries a random `jti`:
+ * two tokens signed for the same user in the same second would otherwise be
+ * byte-identical and collide on the unique `sessions.refresh_token` column.
+ */
+function issueTokens(
+  app: FastifyInstance,
+  user: { id: string; email: string; role: string },
+) {
+  const accessToken = app.jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    { expiresIn: "15m" },
+  );
+
+  const refreshToken = app.jwt.sign(
+    { id: user.id, type: "refresh", jti: generateId() },
+    { expiresIn: "7d" },
+  );
+
+  return { accessToken, refreshToken };
+}
+
 export async function authRoutes(app: FastifyInstance) {
   // ─── POST /auth/register ────────────────────────────────────────────────
-  app.post("/register", async (request, reply) => {
+  app.post("/register", { config: { rateLimit: strictLimit } }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
     const result = await registerUser(body);
 
@@ -40,7 +71,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ─── POST /auth/login ──────────────────────────────────────────────────
-  app.post("/login", async (request, reply) => {
+  app.post("/login", { config: { rateLimit: strictLimit } }, async (request, reply) => {
     const body = loginSchema.parse(request.body);
     const meta = {
       ip: request.ip,
@@ -57,15 +88,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     // Generate JWT tokens
-    const accessToken = app.jwt.sign(
-      { id: result.user.id, email: result.user.email, role: result.user.role },
-      { expiresIn: "15m" },
-    );
-
-    const refreshToken = app.jwt.sign(
-      { id: result.user.id, type: "refresh" },
-      { expiresIn: "7d" },
-    );
+    const { accessToken, refreshToken } = issueTokens(app, result.user);
 
     // Persist session
     await createSession(result.user.id, refreshToken, meta);
@@ -85,15 +108,7 @@ export async function authRoutes(app: FastifyInstance) {
     // Rotate: invalidate old, issue new
     await invalidateSession(refreshToken);
 
-    const newAccessToken = app.jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      { expiresIn: "15m" },
-    );
-
-    const newRefreshToken = app.jwt.sign(
-      { id: user.id, type: "refresh" },
-      { expiresIn: "7d" },
-    );
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } = issueTokens(app, user);
 
     await createSession(user.id, newRefreshToken, {
       ip: request.ip,
@@ -107,7 +122,9 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ─── POST /auth/logout ─────────────────────────────────────────────────
-  app.post("/logout", { preHandler: [authGuard] }, async (request, reply) => {
+  // Authenticated by the refresh token itself (a bearer secret): the access
+  // token is usually already expired by the time someone signs out.
+  app.post("/logout", async (request, reply) => {
     const { refreshToken } = refreshTokenSchema.parse(request.body);
     await invalidateSession(refreshToken);
     reply.send({ message: "Logged out successfully." });
@@ -127,8 +144,19 @@ export async function authRoutes(app: FastifyInstance) {
     reply.send({ message: "Email verified successfully.", email: result.email });
   });
 
+  // ─── POST /auth/resend-verification ────────────────────────────────────
+  app.post(
+    "/resend-verification",
+    { preHandler: [authGuard], config: { rateLimit: strictLimit } },
+    async (request, reply) => {
+      const user = request.user as { id: string };
+      await resendVerificationEmail(user.id);
+      reply.send({ message: "Verification e-mail sent." });
+    },
+  );
+
   // ─── POST /auth/forgot-password ────────────────────────────────────────
-  app.post("/forgot-password", async (request, reply) => {
+  app.post("/forgot-password", { config: { rateLimit: strictLimit } }, async (request, reply) => {
     const body = forgotPasswordSchema.parse(request.body);
     await requestPasswordReset(body);
     // Always returns success to prevent email enumeration
@@ -136,7 +164,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ─── POST /auth/reset-password ─────────────────────────────────────────
-  app.post("/reset-password", async (request, reply) => {
+  app.post("/reset-password", { config: { rateLimit: strictLimit } }, async (request, reply) => {
     const body = resetPasswordSchema.parse(request.body);
     await resetPassword(body);
     reply.send({ message: "Password reset successfully. Please log in." });
@@ -197,5 +225,219 @@ export async function authRoutes(app: FastifyInstance) {
     const { password } = request.body as { password: string };
     await disable2FA(user.id, password);
     reply.send({ message: "2FA disabled." });
+  });
+
+  // ─── PATCH /auth/profile ──────────────────────────────────────────────
+  app.patch("/profile", { preHandler: [authGuard] }, async (request, reply) => {
+    const user = request.user as { id: string; email: string };
+    const body = z
+      .object({
+        firstName: z.string().trim().min(1).max(100).optional(),
+        lastName: z.string().trim().max(100).optional(),
+        displayName: z.string().trim().min(1).max(100).optional(),
+        phone: z.string().trim().max(20).optional(),
+        country: z.string().trim().max(3).optional(),
+        companyName: z.string().trim().max(255).optional(),
+        companyTaxId: z.string().trim().max(50).optional(),
+        avatarUrl: z.string().trim().max(500).optional(),
+      })
+      .parse(request.body);
+
+    const existing = await prisma.userProfile.findUnique({ where: { userId: user.id } });
+    const first = body.firstName ?? existing?.firstName ?? user.email.split("@")[0] ?? "User";
+    const last = body.lastName ?? existing?.lastName ?? "";
+    const displayName = body.displayName ?? `${first} ${last}`.trim();
+
+    const profile = await prisma.userProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
+        ...(body.lastName !== undefined ? { lastName: body.lastName } : {}),
+        ...(body.displayName !== undefined || body.firstName !== undefined || body.lastName !== undefined
+          ? { displayName }
+          : {}),
+        ...(body.phone !== undefined ? { phone: body.phone || null } : {}),
+        ...(body.country !== undefined ? { country: body.country.toUpperCase() || null } : {}),
+        ...(body.companyName !== undefined ? { companyName: body.companyName || null } : {}),
+        ...(body.companyTaxId !== undefined ? { companyTaxId: body.companyTaxId || null } : {}),
+        ...(body.avatarUrl !== undefined ? { avatarUrl: body.avatarUrl || null } : {}),
+      },
+      create: {
+        userId: user.id,
+        firstName: first,
+        lastName: last,
+        displayName,
+        phone: body.phone || null,
+        country: body.country ? body.country.toUpperCase() : null,
+        companyName: body.companyName || null,
+        companyTaxId: body.companyTaxId || null,
+        avatarUrl: body.avatarUrl || null,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "SETTINGS_UPDATE",
+        resource: "profile",
+        resourceId: profile.id,
+      },
+    });
+
+    reply.send({ profile });
+  });
+
+  // ─── GET / PATCH /auth/preferences ────────────────────────────────────
+  app.get("/preferences", { preHandler: [authGuard] }, async (request) => {
+    const user = request.user as { id: string };
+    const preferences = await prisma.userPreference.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: { userId: user.id },
+    });
+    return { preferences };
+  });
+
+  app.patch("/preferences", { preHandler: [authGuard] }, async (request) => {
+    const user = request.user as { id: string };
+    const body = z
+      .object({
+        paymentAlerts: z.boolean().optional(),
+        weeklyDigest: z.boolean().optional(),
+        productRenewals: z.boolean().optional(),
+        securityNotices: z.boolean().optional(),
+      })
+      .parse(request.body);
+
+    const preferences = await prisma.userPreference.upsert({
+      where: { userId: user.id },
+      update: body,
+      create: { userId: user.id, ...body },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "SETTINGS_UPDATE",
+        resource: "preferences",
+        resourceId: preferences.id,
+        details: body,
+      },
+    });
+
+    return { preferences };
+  });
+
+  // ─── GET / POST /auth/kyc ─────────────────────────────────────────────
+  app.get("/kyc", { preHandler: [authGuard] }, async (request) => {
+    const user = request.user as { id: string };
+    const [profile, documents] = await Promise.all([
+      prisma.userProfile.findUnique({ where: { userId: user.id } }),
+      prisma.kycDocument.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+
+    return {
+      kycStatus: profile?.kycStatus ?? "NOT_STARTED",
+      kycLevel: profile?.kycLevel ?? 0,
+      documents: documents.map((d) => ({
+        ...d,
+        createdAt: d.createdAt.toISOString(),
+        reviewedAt: d.reviewedAt?.toISOString() ?? null,
+      })),
+    };
+  });
+
+  app.post("/kyc", { preHandler: [authGuard] }, async (request, reply) => {
+    const user = request.user as { id: string; email: string };
+    const body = z
+      .object({
+        type: z.enum([
+          "IDENTITY_FRONT",
+          "IDENTITY_BACK",
+          "PASSPORT",
+          "SELFIE",
+          "PROOF_OF_ADDRESS",
+          "CORPORATE_REGISTRATION",
+          "TAX_ID",
+        ]),
+        fileUrl: z.string().trim().min(3).max(500),
+        mimeType: z.string().trim().max(50).optional(),
+        documentNumber: z.string().trim().max(100).optional(),
+      })
+      .parse(request.body);
+
+    const doc = await prisma.kycDocument.create({
+      data: {
+        userId: user.id,
+        type: body.type,
+        status: "PENDING",
+        fileUrl: body.fileUrl,
+        mimeType: body.mimeType ?? "application/octet-stream",
+        providerResult: body.documentNumber ? { documentNumber: body.documentNumber } : undefined,
+      },
+    });
+
+    await prisma.userProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        kycStatus: "PENDING",
+        kycSubmittedAt: new Date(),
+      },
+      create: {
+        userId: user.id,
+        firstName: user.email.split("@")[0] ?? "User",
+        lastName: "",
+        kycStatus: "PENDING",
+        kycSubmittedAt: new Date(),
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "KYC_SUBMIT",
+        resource: "kyc_document",
+        resourceId: doc.id,
+        details: { type: body.type },
+      },
+    });
+
+    reply.status(201).send({
+      document: {
+        ...doc,
+        createdAt: doc.createdAt.toISOString(),
+      },
+    });
+  });
+
+  // ─── DELETE /auth/account ─────────────────────────────────────────────
+  app.delete("/account", { preHandler: [authGuard] }, async (request, reply) => {
+    const user = request.user as { id: string };
+    const body = z.object({ password: z.string().min(1) }).parse(request.body ?? {});
+
+    const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
+    if (!dbUser) throw new BadRequestError("Account not found.");
+
+    const valid = await bcrypt.compare(body.password, dbUser.passwordHash);
+    if (!valid) throw new UnauthorizedError("Senha incorreta.");
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: user.id }, data: { status: "CLOSED" } }),
+      prisma.session.deleteMany({ where: { userId: user.id } }),
+      prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "ADMIN_ACTION",
+          resource: "account",
+          resourceId: user.id,
+          details: { action: "SELF_CLOSE" },
+        },
+      }),
+    ]);
+
+    reply.send({ message: "Account closed successfully." });
   });
 }

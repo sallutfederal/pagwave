@@ -1,11 +1,10 @@
 "use client";
 
-import { ChevronDown, LogOut, Search, Settings, User, Wallet } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { ChevronDown, LogOut, Settings, User, Wallet } from "lucide-react";
 
 import Link from "next/link";
+import { useLogout } from "@/components/auth/logout";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { UserAvatar } from "@/components/profile/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,62 +13,56 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { userProfile } from "@/data/user-profile";
-import { useProfile } from "@/lib/profile-store";
+import { useSession } from "@/components/session-provider";
 
 export function Topbar() {
-  const [query, setQuery] = useState("");
-  const profile = useProfile();
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    // Wired to the real search route later; keeps the input from reloading.
-    event.preventDefault();
-  }
+  const user = useSession();
+  const { logout, pending } = useLogout();
 
   return (
-    <header className="bg-background/85 sticky top-0 z-30 backdrop-blur-md">
+    <header className="bg-background/75 border-line sticky top-0 z-30 border-b backdrop-blur-xl">
       <div className="flex h-20 items-center gap-4 px-4 sm:px-6 md:px-8">
         <div className="flex shrink-0 items-center gap-3" />
 
-        <form onSubmit={handleSubmit} role="search" className="mx-auto hidden w-full max-w-sm md:block">
-          <label className="bg-surface-subtle flex h-10 w-full items-center gap-2 rounded-full px-4 transition-colors focus-within:bg-surface focus-within:ring-2 focus-within:ring-accent/20">
-            <Search className="text-subtle-foreground size-4 shrink-0" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search"
-              className="placeholder:text-subtle-foreground text-foreground w-full bg-transparent text-xs outline-none"
-            />
-          </label>
-        </form>
-
-        <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <ThemeToggle />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="dark" size="sm" className="h-10 px-4 text-xs">
-                <span className="hidden sm:inline">{userProfile.accountLabel}</span>
+              <Button variant="outline" size="sm" className="h-10 gap-2 px-4 text-xs">
+                <span className="size-2 rounded-full bg-success" aria-hidden />
+                <span className="hidden max-w-40 truncate sm:inline">{user.name}</span>
                 <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="min-w-56">
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <User /> Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Wallet /> Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings /> Settings
-              </DropdownMenuItem>
+            <DropdownMenuContent className="min-w-60">
+              <div className="space-y-0.5 px-3 py-2">
+                <p className="text-foreground truncate text-sm font-medium">{user.name}</p>
+                <p className="text-muted-foreground truncate text-xs">{user.email}</p>
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/login" className="flex w-full items-center gap-2">
-                  <LogOut /> Sign out
+                <Link href="/settings">
+                  <User /> Profile
                 </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/wallet">
+                  <Wallet /> Billing
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings">
+                  <Settings /> Settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={pending}
+                onSelect={() => void logout()}
+                className="text-rose-400 hover:text-rose-300 focus:text-rose-300"
+              >
+                <LogOut /> Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

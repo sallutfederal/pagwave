@@ -134,7 +134,7 @@ export function MessagesView({ conversations }: { conversations: Conversation[] 
               </Button>
             </header>
 
-            <div className="bg-background flex-1 space-y-3 overflow-y-auto p-5">
+            <div className="bg-background/45 flex-1 space-y-3 overflow-y-auto p-5">
               {selected.messages.map((message) => (
                 <div
                   key={message.id}
@@ -144,15 +144,15 @@ export function MessagesView({ conversations }: { conversations: Conversation[] 
                     className={cn(
                       "max-w-[75%] rounded-2xl px-4 py-2.5 text-[13px] leading-relaxed",
                       message.from === "me"
-                        ? "bg-accent text-accent-fg rounded-br-md"
-                        : "bg-surface text-foreground shadow-card rounded-bl-md",
+                        ? "bg-accent text-accent-fg rounded-br-md shadow-sm"
+                        : "bg-surface border-line text-foreground shadow-card rounded-bl-md border",
                     )}
                   >
                     <p>{message.text}</p>
                     <p
                       className={cn(
                         "mt-1 text-[10px]",
-                        message.from === "me" ? "text-white/70" : "text-subtle-foreground",
+                        message.from === "me" ? "text-accent-fg/65" : "text-subtle-foreground",
                       )}
                     >
                       {message.time}

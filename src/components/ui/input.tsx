@@ -6,8 +6,8 @@ export function Input({ className, ...props }: ComponentProps<"input">) {
     <input
       data-slot="input"
       className={cn(
-        "bg-surface-subtle text-foreground placeholder:text-subtle-foreground h-10 w-full rounded-xl px-3.5 text-sm outline-none transition-[background-color,box-shadow]",
-        "focus:bg-surface focus:ring-2 focus:ring-accent/20",
+        "bg-surface-subtle border-line text-foreground placeholder:text-subtle-foreground h-10 w-full rounded-xl border px-3.5 text-sm backdrop-blur-md outline-none transition-[background-color,border-color,box-shadow]",
+        "focus:border-foreground/30 focus:bg-surface",
         className,
       )}
       {...props}

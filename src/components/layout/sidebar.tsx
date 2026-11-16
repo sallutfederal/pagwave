@@ -4,72 +4,106 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { LogoMark } from "@/components/brand/logo";
-import { logoutItem, mainNav, secondaryNav, type NavItem } from "@/components/layout/nav-items";
+import { LogoutRailButton } from "@/components/auth/logout";
+import { adminNav, mainNav, secondaryNav, type NavItem } from "@/components/layout/nav-items";
+import { SidebarNavIcon } from "@/components/layout/sidebar-icons";
+import { useSession } from "@/components/session-provider";
+import { isAdminRole } from "@/lib/admin-auth";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
 
 function isActive(pathname: string, href: string) {
-  return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+  return href === "/dashboard" || href === "/admin"
+    ? pathname === href
+    : pathname.startsWith(href);
 }
 
-function NavButton({ item, pathname }: { item: NavItem; pathname: string }) {
+function cleanLabel(label: string) {
+  return label.replace(/^Admin ·\s*/, "");
+}
+
+function NavRow({
+  item,
+  pathname,
+}: {
+  item: NavItem;
+  pathname: string;
+}) {
   const active = isActive(pathname, item.href);
-  const Icon = item.icon;
+  const label = cleanLabel(item.label);
 
   return (
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      title={item.label}
       className={cn(
-        "group text-rail-muted hover:bg-rail-soft hover:text-rail-fg relative flex size-11 items-center justify-center rounded-xl transition-colors",
-        active && "bg-rail-soft text-rail-fg",
+        "flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors duration-150",
+        active
+          ? "bg-white/[0.09] text-white"
+          : "text-white/55 hover:bg-white/[0.04] hover:text-white/90",
       )}
     >
-      <Icon className="size-5" strokeWidth={active ? 2.2 : 1.8} />
-      <span className="sr-only">{item.label}</span>
-      {active ? (
-        <span className="bg-accent absolute top-1/2 -left-3 h-6 w-1 -translate-y-1/2 rounded-r-full" />
-      ) : null}
+      <SidebarNavIcon
+        href={item.href}
+        active={active}
+        className={active ? "text-[#e2be72]" : "text-white/50"}
+      />
+      <span className="truncate">{label}</span>
     </Link>
   );
 }
 
-function SidebarLogo({ className }: { className?: string }) {
-  return <LogoMark size={40} className={className} />;
-}
-
-function NavList({ pathname }: { pathname: string }) {
-  return (
-    <>
-      {mainNav.map((item) => (
-        <NavButton key={item.href} item={item} pathname={pathname} />
-      ))}
-      <span className="bg-rail-soft mx-auto my-3 h-px w-8" />
-      {secondaryNav.map((item) => (
-        <NavButton key={item.href} item={item} pathname={pathname} />
-      ))}
-    </>
-  );
-}
-
-/** Dark icon rail: 88px on the left on desktop, bottom bar on mobile. */
+/** Clean, minimalist full-height sidebar on desktop and sleek bottom bar on mobile. */
 export function Sidebar() {
   const pathname = usePathname();
+  const user = useSession();
+  const showAdmin = isAdminRole(user?.role);
 
   return (
     <>
-      <aside className="bg-rail fixed inset-y-0 left-0 z-40 hidden w-[88px] flex-col items-center py-6 md:flex">
-        <SidebarLogo />
-        <nav className="mt-10 flex flex-1 flex-col items-center gap-1.5">
-          <NavList pathname={pathname} />
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[220px] flex-col border-r border-white/[0.07] bg-[#090a0e]/95 px-3 py-5 backdrop-blur-xl md:flex">
+        <Link
+          href="/dashboard"
+          className="mb-6 flex items-center gap-2.5 px-2.5 transition-opacity hover:opacity-90"
+        >
+          <LogoMark size={28} radius={26} />
+          <span className="text-[15px] font-semibold tracking-tight text-white">
+            pagwave
+          </span>
+        </Link>
+
+        <nav className="no-scrollbar flex flex-1 flex-col gap-0.5 overflow-y-auto">
+          {mainNav.map((item) => (
+            <NavRow key={item.href} item={item} pathname={pathname} />
+          ))}
+
+          <div className="my-3 h-px bg-white/[0.06]" />
+
+          {secondaryNav.map((item) => (
+            <NavRow key={item.href} item={item} pathname={pathname} />
+          ))}
+
+          {showAdmin ? (
+            <div className="mt-4 border-t border-white/[0.06] pt-3">
+              <p className="mb-1.5 px-3 text-[11px] font-medium text-white/35">
+                Admin
+              </p>
+              <div className="flex flex-col gap-0.5">
+                {adminNav.map((item) => (
+                  <NavRow key={item.href} item={item} pathname={pathname} />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </nav>
-        <NavButton item={logoutItem} pathname="" />
+
+        <div className="mt-3 border-t border-white/[0.06] pt-3">
+          <LogoutRailButton />
+        </div>
       </aside>
 
-      <nav className="bg-rail fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around md:hidden">
-        {mainNav.slice(0, 5).map((item) => {
-          const Icon = item.icon;
+      {/* Minimalist mobile bottom bar */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-center justify-around border-t border-white/[0.08] bg-[#090a0e]/95 px-2 backdrop-blur-xl md:hidden">
+        {mainNav.slice(0, 4).map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <Link
@@ -78,18 +112,47 @@ export function Sidebar() {
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
               className={cn(
-                "text-rail-muted flex size-11 flex-col items-center justify-center rounded-xl transition-colors",
-                active && "bg-rail-soft text-rail-fg",
+                "flex size-10 items-center justify-center rounded-lg transition-colors",
+                active ? "bg-white/[0.09] text-[#e2be72]" : "text-white/50 hover:text-white",
               )}
             >
-              <Icon className="size-5" strokeWidth={active ? 2.2 : 1.8} />
+              <SidebarNavIcon href={item.href} active={active} />
             </Link>
           );
         })}
+        {secondaryNav.map((item) => {
+          const active = isActive(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              aria-label={item.label}
+              className={cn(
+                "flex size-10 items-center justify-center rounded-lg transition-colors",
+                active ? "bg-white/[0.09] text-[#e2be72]" : "text-white/50 hover:text-white",
+              )}
+            >
+              <SidebarNavIcon href={item.href} active={active} />
+            </Link>
+          );
+        })}
+        {showAdmin ? (
+          <Link
+            href="/admin"
+            aria-current={pathname.startsWith("/admin") ? "page" : undefined}
+            aria-label="Admin"
+            className={cn(
+              "flex size-10 items-center justify-center rounded-lg transition-colors",
+              pathname.startsWith("/admin")
+                ? "bg-white/[0.09] text-[#e2be72]"
+                : "text-white/50 hover:text-white",
+            )}
+          >
+            <SidebarNavIcon href="/admin" active={pathname.startsWith("/admin")} />
+          </Link>
+        ) : null}
       </nav>
     </>
   );
 }
-
-export { SidebarLogo, NavButton };
-export type { LucideIcon };
