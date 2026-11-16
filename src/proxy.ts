@@ -10,7 +10,15 @@ import {
   sessionCookieOptions,
 } from "@/lib/session-constants";
 
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000/api/v1";
+function resolveRefreshUrl(requestUrl: string): string {
+  const explicit = process.env.BACKEND_URL?.trim();
+  if (explicit) {
+    return new URL("auth/refresh", `${explicit.replace(/\/+$/, "")}/`).toString();
+  }
+  // In Vercel Services mode, bindings resolve in Functions (not Middleware),
+  // so middleware delegates to our Next.js Function `/api/auth/refresh`.
+  return new URL("/api/auth/refresh", requestUrl).toString();
+}
 
 type Tokens = { accessToken: string; refreshToken: string };
 
@@ -22,13 +30,17 @@ type Tokens = { accessToken: string; refreshToken: string };
  */
 const inflight = new Map<string, Promise<Tokens | null>>();
 
-function refreshTokens(refreshToken: string, headers: Headers): Promise<Tokens | null> {
+function refreshTokens(
+  refreshToken: string,
+  headers: Headers,
+  requestUrl: string,
+): Promise<Tokens | null> {
   const existing = inflight.get(refreshToken);
   if (existing) return existing;
 
   const attempt = (async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
+      const response = await fetch(resolveRefreshUrl(requestUrl), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -99,7 +111,7 @@ export async function proxy(request: NextRequest) {
   /* A prefetch must not spend the single-use refresh token. */
   if (isPrefetch(request)) return NextResponse.next();
 
-  const tokens = await refreshTokens(refresh, request.headers);
+  const tokens = await refreshTokens(refresh, request.headers, request.url);
 
   if (!tokens) {
     return isApi

@@ -5,7 +5,20 @@ import { headers } from "next/headers";
 import { getAccessToken } from "@/lib/session";
 
 /** Base URL of the Fastify API, including the version prefix. */
-export const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:4000/api/v1";
+export function getBackendBaseUrl(): string {
+  const explicit = process.env.BACKEND_URL?.trim();
+  if (explicit) return explicit.replace(/\/+$/, "");
+
+  const bound = process.env.BACKEND_ORIGIN?.trim();
+  if (bound) {
+    const clean = bound.replace(/\/+$/, "");
+    return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
+  }
+
+  return "http://localhost:4000/api/v1";
+}
+
+export const BACKEND_URL = getBackendBaseUrl();
 
 export class BackendError extends Error {
   constructor(
@@ -73,7 +86,8 @@ export async function backendFetch<T>(path: string, options: BackendOptions = {}
   let response: Response;
 
   try {
-    response = await fetch(`${BACKEND_URL}${path}`, {
+    const targetUrl = new URL(path.replace(/^\//, ""), `${getBackendBaseUrl()}/`).toString();
+    response = await fetch(targetUrl, {
       method,
       headers: requestHeaders,
       body: body === undefined ? undefined : JSON.stringify(body),

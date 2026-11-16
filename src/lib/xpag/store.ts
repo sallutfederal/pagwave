@@ -2,7 +2,7 @@ import "server-only";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { BACKEND_URL } from "@/lib/backend";
+import { getBackendBaseUrl } from "@/lib/backend";
 import type { XPagCurrency } from "@/lib/xpag/currencies";
 
 export type BeneficiaryRecord = {
@@ -153,7 +153,9 @@ async function gatewayBackend<T>(
   options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
 ): Promise<T | null> {
   try {
-    const res = await fetch(`${BACKEND_URL}/gateway${pathSuffix}`, {
+    const cleanSuffix = pathSuffix.replace(/^\//, "");
+    const targetUrl = new URL(`gateway/${cleanSuffix}`, `${getBackendBaseUrl()}/`).toString();
+    const res = await fetch(targetUrl, {
       method: options.method ?? "GET",
       headers: {
         "Content-Type": "application/json",

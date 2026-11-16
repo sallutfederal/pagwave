@@ -19,7 +19,16 @@ const envSchema = z.object({
 
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   /** Public URL of the web app, used to build links in e-mails. */
-  APP_URL: z.string().url().default("http://localhost:3000"),
+  APP_URL: z
+    .string()
+    .url()
+    .default(
+      process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : "http://localhost:3000",
+    ),
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),

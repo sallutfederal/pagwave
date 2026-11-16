@@ -133,9 +133,9 @@ export async function buildServer() {
   return app;
 }
 
-async function main() {
-  const app = await buildServer();
+export const app = await buildServer();
 
+async function startStandalone() {
   const shutdown = async (signal: string) => {
     app.log.info(`${signal} received, shutting down...`);
     await app.close();
@@ -155,4 +155,8 @@ async function main() {
   }
 }
 
-void main();
+if (!process.env.VERCEL) {
+  void startStandalone();
+}
+
+export default app;
