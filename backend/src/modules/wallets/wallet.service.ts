@@ -431,6 +431,62 @@ export async function rejectDeposit(referenceId: string, reviewerId: string, rea
 
 const ACTIVE_WITHDRAWAL_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FROZEN"] as const;
 
+export async function assertWithdrawalLimits(
+  userId: string,
+  currencyCode: string,
+  amount: Decimal,
+) {
+  const profile = await prisma.userProfile.findUnique({ where: { userId } });
+  const kycLevel = profile?.kycLevel ?? 0;
+
+  const limit = await prisma.withdrawalLimit.findUnique({
+    where: { kycLevel_currencyCode: { kycLevel, currencyCode } },
+  });
+
+  if (!limit) return;
+
+  if (amount.gt(limit.singleTxMax)) {
+    throw new WithdrawalLimitError("single", limit.singleTxMax.toString());
+  }
+
+  const now = new Date();
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+  const [dailyAgg, monthlyAgg] = await Promise.all([
+    prisma.transaction.aggregate({
+      _sum: { amount: true },
+      where: {
+        userId,
+        type: "WITHDRAWAL",
+        currencyCode,
+        status: { in: [...ACTIVE_WITHDRAWAL_STATUSES] },
+        createdAt: { gte: dayStart },
+      },
+    }),
+    prisma.transaction.aggregate({
+      _sum: { amount: true },
+      where: {
+        userId,
+        type: "WITHDRAWAL",
+        currencyCode,
+        status: { in: [...ACTIVE_WITHDRAWAL_STATUSES] },
+        createdAt: { gte: monthStart },
+      },
+    }),
+  ]);
+
+  const dailyUsed = dailyAgg._sum.amount ?? decimalZero();
+  if (decimalAdd(dailyUsed, amount).gt(limit.dailyLimit)) {
+    throw new WithdrawalLimitError("daily", limit.dailyLimit.toString());
+  }
+
+  const monthlyUsed = monthlyAgg._sum.amount ?? decimalZero();
+  if (decimalAdd(monthlyUsed, amount).gt(limit.monthlyLimit)) {
+    throw new WithdrawalLimitError("monthly", limit.monthlyLimit.toString());
+  }
+}
+
 export async function createWithdrawal(userId: string, input: WithdrawalInput) {
   const wallet = await prisma.wallet.findFirst({
     where: { id: input.walletId, userId, isActive: true },
@@ -442,55 +498,7 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
   const amount = toDecimal(input.amount);
 
   // Check KYC level & withdrawal limits (single, daily, monthly)
-  const profile = await prisma.userProfile.findUnique({ where: { userId } });
-  const kycLevel = profile?.kycLevel ?? 0;
-
-  const limit = await prisma.withdrawalLimit.findUnique({
-    where: { kycLevel_currencyCode: { kycLevel, currencyCode: wallet.currency.code } },
-  });
-
-  if (limit) {
-    if (amount.gt(limit.singleTxMax)) {
-      throw new WithdrawalLimitError("single", limit.singleTxMax.toString());
-    }
-
-    const now = new Date();
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-
-    const [dailyAgg, monthlyAgg] = await Promise.all([
-      prisma.transaction.aggregate({
-        _sum: { amount: true },
-        where: {
-          userId,
-          type: "WITHDRAWAL",
-          currencyCode: wallet.currency.code,
-          status: { in: [...ACTIVE_WITHDRAWAL_STATUSES] },
-          createdAt: { gte: dayStart },
-        },
-      }),
-      prisma.transaction.aggregate({
-        _sum: { amount: true },
-        where: {
-          userId,
-          type: "WITHDRAWAL",
-          currencyCode: wallet.currency.code,
-          status: { in: [...ACTIVE_WITHDRAWAL_STATUSES] },
-          createdAt: { gte: monthStart },
-        },
-      }),
-    ]);
-
-    const dailyUsed = dailyAgg._sum.amount ?? decimalZero();
-    if (decimalAdd(dailyUsed, amount).gt(limit.dailyLimit)) {
-      throw new WithdrawalLimitError("daily", limit.dailyLimit.toString());
-    }
-
-    const monthlyUsed = monthlyAgg._sum.amount ?? decimalZero();
-    if (decimalAdd(monthlyUsed, amount).gt(limit.monthlyLimit)) {
-      throw new WithdrawalLimitError("monthly", limit.monthlyLimit.toString());
-    }
-  }
+  await assertWithdrawalLimits(userId, wallet.currency.code, amount);
 
   // Check balance
   if (!decimalGte(wallet.availableBalance, amount)) {

@@ -7,7 +7,11 @@ import {
   simulateXPagConversion,
 } from "@/lib/xpag/client";
 import { CURRENCY_SPECS, XPAG_CURRENCIES } from "@/lib/xpag/currencies";
-import { recordWalletActivity } from "@/lib/xpag/store";
+import {
+  getUserLedgerBalances,
+  recordWalletActivity,
+  settleConversionInLedger,
+} from "@/lib/xpag/store";
 
 const ConversionSchema = z.object({
   action: z.enum(["simulate", "execute"]),
@@ -65,6 +69,16 @@ export function POST(request: Request) {
       return { ok: true, simulation };
     }
 
+    const ledger = await getUserLedgerBalances(userId);
+    const available = ledger.balances[from]?.available ?? 0;
+    if (available < normalizedAmount) {
+      throw new XPagError(
+        `Saldo disponível insuficiente em ${from} para realizar a conversão.`,
+        422,
+        "insufficient_funds",
+      );
+    }
+
     const externalId =
       parsed.data.externalId || `pw_fx_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
     const conversion = await executeXPagConversion({
@@ -74,13 +88,31 @@ export function POST(request: Request) {
       external_id: externalId,
     });
 
+    const convertedAmount =
+      conversion.converted_amount ??
+      conversion.net_amount ??
+      conversion.estimated_amount ??
+      normalizedAmount * conversion.rate;
+
+    if (convertedAmount > 0) {
+      await settleConversionInLedger({
+        userId,
+        fromCurrency: from,
+        toCurrency: to,
+        fromAmount: normalizedAmount,
+        toAmount: convertedAmount,
+        rate: conversion.rate,
+        externalId,
+      });
+    }
+
     await recordWalletActivity({
       userId,
       kind: "conversion",
       currency: from,
       toCurrency: to,
       amount: normalizedAmount,
-      convertedAmount: conversion.converted_amount ?? conversion.net_amount,
+      convertedAmount,
       status: "completed",
       externalId,
       transactionId: conversion.transaction_id,
@@ -90,4 +122,3 @@ export function POST(request: Request) {
     return { ok: true, externalId, conversion };
   });
 }
-

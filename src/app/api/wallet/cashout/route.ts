@@ -13,7 +13,12 @@ import {
   validateDestinationInput,
   type XPagCurrency,
 } from "@/lib/xpag/currencies";
-import { getBeneficiaryById, recordWalletActivity } from "@/lib/xpag/store";
+import {
+  getBeneficiaryById,
+  recordWalletActivity,
+  releaseCashoutInLedger,
+  reserveCashoutInLedger,
+} from "@/lib/xpag/store";
 
 const CashoutSchema = z.object({
   beneficiaryId: z.string().trim().optional(),
@@ -68,28 +73,49 @@ export function POST(request: Request) {
       throw new XPagError(validationError, 400, "invalid_destination");
     }
 
+    const normalizedAmount = currency === "CLP" ? Math.round(amount) : amount;
     const externalId =
       parsed.data.externalId || `pw_out_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
     const origin = request.headers.get("origin") ?? undefined;
     const webhookUrl = resolveWebhookUrl(origin);
 
+    // Reserve user's ledger balance and enforce KYC/daily/monthly limits before calling XPAG.
+    await reserveCashoutInLedger({
+      userId,
+      currency,
+      amount: normalizedAmount,
+      externalId,
+      rail,
+      description,
+    });
+
     const payload = buildCashoutPayload({
       currency,
       rail,
-      amount,
+      amount: normalizedAmount,
       externalId,
       webhookUrl,
       description,
       details,
     });
 
-    const result = await createXPagCashout(payload);
+    let result: Record<string, unknown>;
+    try {
+      result = await createXPagCashout(payload);
+    } catch (error) {
+      await releaseCashoutInLedger({
+        userId,
+        externalId,
+        reason: error instanceof Error ? error.message : "Falha na criação do saque XPag",
+      });
+      throw error;
+    }
 
     await recordWalletActivity({
       userId,
       kind: "cashout",
       currency,
-      amount: currency === "CLP" ? Math.round(amount) : amount,
+      amount: normalizedAmount,
       rail,
       status: String(result.status ?? "processing"),
       externalId,
@@ -103,4 +129,3 @@ export function POST(request: Request) {
     return { ok: true, externalId, result };
   });
 }
-

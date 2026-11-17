@@ -8,10 +8,15 @@ export type BalanceEntry = {
 export type BalancePayload = {
   ok: boolean;
   isSandbox: boolean;
+  ledgerScope?: "user";
+  kycLevel?: number;
+  kycStatus?: string;
   balances: Partial<Record<XPagCurrency, BalanceEntry>> & Record<string, BalanceEntry>;
   blocked_currencies?: string[];
   updated_at?: string;
 };
+
+export type CashinIntent = "self_deposit" | "charge";
 
 export type ClientBeneficiary = {
   id: string;

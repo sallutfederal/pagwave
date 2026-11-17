@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getBackendBaseUrl } from "@/lib/backend";
+import { XPagError } from "@/lib/xpag/client";
 import type { XPagCurrency } from "@/lib/xpag/currencies";
 
 export type BeneficiaryRecord = {
@@ -170,6 +171,49 @@ async function gatewayBackend<T>(
   } catch {
     return null;
   }
+}
+
+async function gatewayStrict<T>(
+  pathSuffix: string,
+  options: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
+): Promise<T> {
+  const cleanSuffix = pathSuffix.replace(/^\//, "");
+  const targetUrl = new URL(`gateway/${cleanSuffix}`, `${getBackendBaseUrl()}/`).toString();
+
+  let res: Response;
+  try {
+    res = await fetch(targetUrl, {
+      method: options.method ?? "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Secret": INTERNAL_SECRET,
+      },
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    throw new XPagError(
+      "Serviço de ledger indisponível no momento. Tente novamente.",
+      503,
+      "ledger_unavailable",
+    );
+  }
+
+  const json = (await res.json().catch(() => null)) as {
+    error?: string;
+    message?: string;
+  } | null;
+
+  if (!res.ok) {
+    throw new XPagError(
+      json?.message || "Operação financeira recusada.",
+      res.status,
+      json?.error || `http_${res.status}`,
+    );
+  }
+
+  return json as T;
 }
 
 async function readStoreFile(): Promise<StoreData> {
@@ -1100,6 +1144,63 @@ export async function listAdminGlobalIntegrations() {
     logs: store.apiLogs.slice(0, 80),
     webhooks: store.webhooks.slice(0, 60),
   };
+}
+
+export async function getUserLedgerBalances(userId: string) {
+  return gatewayStrict<{
+    balances: Record<string, { available: number; blocked: number }>;
+    blocked_currencies: string[];
+    environmentMode: "auto" | "sandbox" | "production";
+    kycLevel: number;
+    kycStatus: string;
+    updated_at: string;
+  }>(`/ledger/${userId}/balances`);
+}
+
+export async function reserveCashoutInLedger(input: {
+  userId: string;
+  currency: XPagCurrency;
+  amount: number;
+  externalId: string;
+  rail?: string;
+  description?: string;
+}) {
+  return gatewayStrict<{ ok: boolean; txId: string; referenceId: string }>(
+    "/ledger/reserve-cashout",
+    {
+      method: "POST",
+      body: input,
+    },
+  );
+}
+
+export async function releaseCashoutInLedger(input: {
+  userId: string;
+  externalId: string;
+  reason?: string;
+}) {
+  return gatewayBackend<{ ok: boolean; released: boolean }>(
+    "/ledger/release-cashout",
+    {
+      method: "POST",
+      body: input,
+    },
+  );
+}
+
+export async function settleConversionInLedger(input: {
+  userId: string;
+  fromCurrency: XPagCurrency;
+  toCurrency: XPagCurrency;
+  fromAmount: number;
+  toAmount: number;
+  rate?: number;
+  externalId: string;
+}) {
+  return gatewayStrict<{ ok: boolean }>("/ledger/settle-conversion", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export function __getEmptyStoreForTypes() {

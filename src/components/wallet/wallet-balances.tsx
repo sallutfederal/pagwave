@@ -41,10 +41,11 @@ export function WalletBalances({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-foreground text-base font-semibold tracking-tight">
-            Saldos Multi-moeda & Redes Cripto
+            Sua Carteira Multi-moeda & Redes Cripto
           </h2>
           <p className="text-muted-foreground text-xs">
-            Disponível para saque vs. bloqueado em MED. Nunca somamos saldo bloqueado ao disponível.
+            Saldo individual da sua conta (disponível vs. bloqueado em saque/MED)
+            {balanceData?.kycLevel !== undefined ? ` · KYC Nível ${balanceData.kycLevel}/3` : ""}.
           </p>
         </div>
 
@@ -140,7 +141,7 @@ export function WalletBalances({
                   }}
                 >
                   <ArrowDownLeft className="size-3 text-emerald-400" />
-                  Receber
+                  Depositar
                 </Button>
                 <Button
                   type="button"

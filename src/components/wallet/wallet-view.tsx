@@ -17,6 +17,7 @@ import {
 } from "@/components/wallet/conversion-and-history";
 import type {
   BalancePayload,
+  CashinIntent,
   ClientBeneficiary,
   ClientWalletActivity,
   ClientWebhookEvent,
@@ -32,7 +33,7 @@ const TABS: Array<{
   icon: typeof ArrowUpRight;
 }> = [
   { id: "cashout", label: "Sacar (Cash-out)", icon: ArrowUpRight },
-  { id: "cashin", label: "Receber (Cash-in)", icon: ArrowDownLeft },
+  { id: "cashin", label: "Depositar & Receber", icon: ArrowDownLeft },
   { id: "beneficiaries", label: "Chaves & Carteiras", icon: KeyRound },
   { id: "convert", label: "Conversão FX", icon: ArrowLeftRight },
   { id: "history", label: "Extrato & Consultas", icon: History },
@@ -40,6 +41,7 @@ const TABS: Array<{
 
 export function WalletView() {
   const [activeTab, setActiveTab] = useState<WalletTab>("cashout");
+  const [cashinIntent, setCashinIntent] = useState<CashinIntent>("self_deposit");
   const [selectedCurrency, setSelectedCurrency] = useState<XPagCurrency>("BRL");
   const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(
     null,
@@ -131,6 +133,7 @@ export function WalletView() {
         onSelectCurrency={setSelectedCurrency}
         onQuickDeposit={(currency) => {
           setSelectedCurrency(currency);
+          setCashinIntent("self_deposit");
           setActiveTab("cashin");
         }}
         onQuickWithdraw={(currency) => {
@@ -180,6 +183,8 @@ export function WalletView() {
           key={selectedCurrency}
           selectedCurrency={selectedCurrency}
           isSandbox={balanceData?.isSandbox ?? true}
+          intent={cashinIntent}
+          onChangeIntent={setCashinIntent}
           onSelectCurrency={setSelectedCurrency}
           onSuccessRefresh={refreshAll}
         />

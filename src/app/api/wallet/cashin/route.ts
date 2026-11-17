@@ -10,9 +10,11 @@ import {
   CURRENCY_SPECS,
   XPAG_CURRENCIES,
 } from "@/lib/xpag/currencies";
-import { recordWalletActivity } from "@/lib/xpag/store";
+import { listWalletFeed, recordWalletActivity } from "@/lib/xpag/store";
+import { getCurrentUser } from "@/server/auth";
 
 const CashinSchema = z.object({
+  purpose: z.enum(["self_deposit", "charge"]).default("charge"),
   currency: z.enum(XPAG_CURRENCIES),
   method: z.string().trim().optional(),
   mode: z.enum(["dynamic", "static"]).default("dynamic"),
@@ -21,6 +23,32 @@ const CashinSchema = z.object({
   description: z.string().trim().max(140).optional(),
   payer: z.record(z.string(), z.string()).optional(),
 });
+
+export function GET(request: Request) {
+  return xpagPrivateJson(async (userId) => {
+    const url = new URL(request.url);
+    const requestNumber = url.searchParams.get("request_number")?.trim();
+    const externalId = url.searchParams.get("external_id")?.trim();
+
+    if (!requestNumber && !externalId) {
+      throw new XPagError("Informe request_number ou external_id.", 400, "missing_ref");
+    }
+
+    const { activities } = await listWalletFeed(userId);
+    const match = activities.find(
+      (a) =>
+        (requestNumber && a.requestNumber === requestNumber) ||
+        (externalId && a.externalId === externalId),
+    );
+
+    return {
+      ok: true,
+      status: match?.status ?? "pending",
+      e2e: match?.e2e,
+      updatedAt: match?.updatedAt,
+    };
+  });
+}
 
 export function POST(request: Request) {
   return xpagPrivateJson(async (userId) => {
@@ -34,7 +62,7 @@ export function POST(request: Request) {
       );
     }
 
-    const { currency, mode, description } = parsed.data;
+    const { purpose, currency, mode, description } = parsed.data;
     const spec = CURRENCY_SPECS[currency];
     const method = parsed.data.method || spec.cashinMethods[0]?.id;
 
@@ -47,7 +75,7 @@ export function POST(request: Request) {
         );
       }
     } else if (!parsed.data.amount || parsed.data.amount <= 0) {
-      throw new XPagError("Informe o valor da cobrança.", 400, "missing_amount");
+      throw new XPagError("Informe o valor do depósito.", 400, "missing_amount");
     }
 
     const amount =
@@ -73,6 +101,12 @@ export function POST(request: Request) {
         .filter(([, v]) => v !== ""),
     );
 
+    if (purpose === "self_deposit") {
+      const currentUser = await getCurrentUser();
+      if (!payer.name) payer.name = currentUser.name;
+      if (!payer.email) payer.email = currentUser.email;
+    }
+
     for (const field of spec.cashinPayerFields) {
       if (field.required && !payer[field.key]) {
         throw new XPagError(
@@ -84,7 +118,8 @@ export function POST(request: Request) {
     }
 
     const externalId =
-      parsed.data.externalId || `pw_in_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
+      parsed.data.externalId ||
+      `${purpose === "self_deposit" ? "pw_dep" : "pw_in"}_${Date.now()}_${crypto.randomUUID().slice(0, 6)}`;
     const originHeader = request.headers.get("origin") ?? undefined;
     const webhookUrl = resolveWebhookUrl(originHeader);
 
@@ -93,7 +128,11 @@ export function POST(request: Request) {
       external_id: externalId,
       ...(amount !== undefined ? { amount } : {}),
       ...(webhookUrl ? { webhook_url: webhookUrl } : {}),
-      ...(description ? { description } : {}),
+      ...(description
+        ? { description }
+        : purpose === "self_deposit"
+          ? { description: `Depósito na conta Pagwave (${currency})` }
+          : {}),
       ...payer,
     };
 
@@ -126,11 +165,12 @@ export function POST(request: Request) {
           ? `CLABE ${result.clabe}`
           : typeof result.deposit_address === "string"
             ? result.deposit_address
-            : method,
-      metadata: result,
+            : purpose === "self_deposit"
+              ? `Depósito próprio (${method})`
+              : method,
+      metadata: { ...result, purpose },
     });
 
-    return { ok: true, externalId, mode, result };
+    return { ok: true, externalId, mode, purpose, result };
   });
 }
-

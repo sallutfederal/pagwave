@@ -1,14 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDownLeft,
   Check,
+  CheckCircle2,
   Copy,
   ExternalLink,
   FlaskConical,
+  Loader2,
+  PiggyBank,
   QrCode,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -22,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { CurrencyBadge } from "@/components/wallet/currency-badge";
 import { DynamicFields } from "@/components/wallet/dynamic-fields";
+import type { CashinIntent } from "@/components/wallet/types";
 import {
   CURRENCY_SPECS,
   XPAG_CURRENCIES,
@@ -33,6 +38,8 @@ import { cn } from "@/lib/utils";
 type CashinPanelProps = {
   selectedCurrency: XPagCurrency;
   isSandbox: boolean;
+  intent: CashinIntent;
+  onChangeIntent: (intent: CashinIntent) => void;
   onSelectCurrency: (currency: XPagCurrency) => void;
   onSuccessRefresh: () => void;
 };
@@ -59,16 +66,21 @@ function CopyChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+const SETTLED_STATUSES = new Set(["paid", "completed"]);
+const TERMINAL_FAILURE_STATUSES = new Set(["failed", "expired", "cancelled", "rejected"]);
+
 export function CashinPanel({
   selectedCurrency,
   isSandbox,
+  intent,
+  onChangeIntent,
   onSelectCurrency,
   onSuccessRefresh,
 }: CashinPanelProps) {
   const spec = CURRENCY_SPECS[selectedCurrency];
   const [method, setMethod] = useState<string>(spec.cashinMethods[0]?.id ?? "");
   const [mode, setMode] = useState<"dynamic" | "static">("dynamic");
-  const [amountInput, setAmountInput] = useState("100");
+  const [amountInput, setAmountInput] = useState(spec.integerOnly ? "10000" : "100");
   const [description, setDescription] = useState("");
   const [payer, setPayer] = useState<Record<string, string>>({});
 
@@ -76,10 +88,49 @@ export function CashinPanel({
   const [simulating, setSimulating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [cashinResult, setCashinResult] = useState<Record<string, unknown> | null>(null);
+  const [externalRef, setExternalRef] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
   const [simResult, setSimResult] = useState<Record<string, unknown> | null>(null);
 
+  const isSelfDeposit = intent === "self_deposit";
   const activeMethodMeta = spec.cashinMethods.find((m) => m.id === method);
-  const canUseStatic = Boolean(activeMethodMeta?.supportsOpenValue);
+  const canUseStatic = !isSelfDeposit && Boolean(activeMethodMeta?.supportsOpenValue);
+  const quickAmounts = spec.integerOnly ? [10000, 50000, 100000, 250000] : [50, 100, 500, 1000];
+
+  const requestNumber =
+    typeof cashinResult?.request_number === "string" ? cashinResult.request_number : null;
+
+  useEffect(() => {
+    if (!cashinResult || (!requestNumber && !externalRef)) return;
+    const current = (liveStatus ?? "").toLowerCase();
+    if (SETTLED_STATUSES.has(current) || TERMINAL_FAILURE_STATUSES.has(current)) return;
+
+    let active = true;
+    const poll = async () => {
+      const qs = new URLSearchParams();
+      if (requestNumber) qs.set("request_number", requestNumber);
+      if (externalRef) qs.set("external_id", externalRef);
+
+      const res = await fetch(`/api/wallet/cashin?${qs.toString()}`, { cache: "no-store" }).catch(
+        () => null,
+      );
+      if (!active || !res?.ok) return;
+      const json = (await res.json().catch(() => null)) as { status?: string } | null;
+      if (!active || !json?.status) return;
+
+      const next = json.status.toLowerCase();
+      setLiveStatus(next);
+      if (SETTLED_STATUSES.has(next)) {
+        onSuccessRefresh();
+      }
+    };
+
+    const timer = setInterval(() => void poll(), 4000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [cashinResult, requestNumber, externalRef, liveStatus, onSuccessRefresh]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +142,7 @@ export function CashinPanel({
       effectiveMode === "static" ? undefined : Number(amountInput.replace(",", "."));
 
     if (effectiveMode === "dynamic" && (!numAmount || !Number.isFinite(numAmount) || numAmount <= 0)) {
-      setErrorMsg("Informe um valor positivo para a cobrança dinâmica.");
+      setErrorMsg("Informe um valor positivo para continuar.");
       return;
     }
 
@@ -101,34 +152,37 @@ export function CashinPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          purpose: intent,
           currency: selectedCurrency,
           method,
           mode: effectiveMode,
           amount: numAmount,
           description: description.trim() || undefined,
-          payer,
+          payer: isSelfDeposit ? undefined : payer,
         }),
       });
       const json = (await res.json()) as {
         ok?: boolean;
+        externalId?: string;
         message?: string;
         result?: Record<string, unknown>;
       };
       if (!res.ok || !json.ok) {
-        setErrorMsg(json.message || "Falha ao gerar instrução de recebimento.");
+        setErrorMsg(json.message || "Falha ao gerar instrução de depósito.");
         return;
       }
       setCashinResult(json.result ?? {});
+      setExternalRef(json.externalId ?? null);
+      setLiveStatus(
+        typeof json.result?.status === "string" ? json.result.status.toLowerCase() : "pending",
+      );
       onSuccessRefresh();
     } catch {
-      setErrorMsg("Erro de comunicação ao criar cobrança.");
+      setErrorMsg("Erro de comunicação ao gerar depósito.");
     } finally {
       setSubmitting(false);
     }
   };
-
-  const requestNumber =
-    typeof cashinResult?.request_number === "string" ? cashinResult.request_number : null;
 
   const handleSimulate = async (status: "paid" | "failed" | "expired") => {
     if (!requestNumber) return;
@@ -153,6 +207,7 @@ export function CashinPanel({
         return;
       }
       setSimResult(json.result ?? {});
+      setLiveStatus(status);
       onSuccessRefresh();
     } finally {
       setSimulating(false);
@@ -175,6 +230,10 @@ export function CashinPanel({
   const checkoutUrl =
     typeof cashinResult?.checkout_url === "string" ? cashinResult.checkout_url : null;
 
+  const normalizedLiveStatus = (liveStatus ?? "pending").toLowerCase();
+  const isPaid = SETTLED_STATUSES.has(normalizedLiveStatus);
+  const isFailed = TERMINAL_FAILURE_STATUSES.has(normalizedLiveStatus);
+
   return (
     <div className="grid items-start gap-6 xl:grid-cols-12">
       <Card className="p-5 sm:p-6 xl:col-span-7">
@@ -182,19 +241,53 @@ export function CashinPanel({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div>
               <h3 className="text-foreground text-base font-semibold">
-                Receber / Depositar na Carteira (Cash-in)
+                {isSelfDeposit ? "Depositar na minha conta" : "Cobrar terceiro (Cash-in)"}
               </h3>
               <p className="text-muted-foreground text-xs">
-                Gere Pix dinâmico ou estático, CLABE/OXXO, Nequi/Bre-B, CVU argentino ou depósito cripto.
+                {isSelfDeposit
+                  ? "Gere um Pix ou depósito local para adicionar e guardar saldo na sua carteira."
+                  : "Gere cobrança dinâmica ou estática para clientes em BRL, MXN, COP, ARS, CLP ou cripto."}
               </p>
             </div>
             <CurrencyBadge currency={selectedCurrency} />
           </div>
 
+          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-white/[0.02] p-1">
+            <button
+              type="button"
+              onClick={() => {
+                onChangeIntent("self_deposit");
+                setMode("dynamic");
+              }}
+              className={cn(
+                "flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all",
+                isSelfDeposit
+                  ? "bg-accent text-accent-fg shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <PiggyBank className="size-3.5" />
+              Depositar na minha conta
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeIntent("charge")}
+              className={cn(
+                "flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all",
+                !isSelfDeposit
+                  ? "bg-accent text-accent-fg shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Receipt className="size-3.5" />
+              Cobrar terceiro
+            </button>
+          </div>
+
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                Moeda / País de recebimento
+                {isSelfDeposit ? "Moeda da carteira" : "Moeda / País de recebimento"}
               </label>
               <Select
                 value={selectedCurrency}
@@ -240,7 +333,7 @@ export function CashinPanel({
           </div>
 
           {activeMethodMeta ? (
-            <p className="text-muted-foreground rounded-xl border border-white/10 bg-surface-subtle px-3.5 py-2 text-xs">
+            <p className="text-muted-foreground bg-surface-subtle rounded-xl border border-white/10 px-3.5 py-2 text-xs">
               {activeMethodMeta.description}
             </p>
           ) : null}
@@ -283,6 +376,26 @@ export function CashinPanel({
             </div>
           ) : null}
 
+          {isSelfDeposit ? (
+            <div className="flex flex-wrap gap-2">
+              {quickAmounts.map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setAmountInput(String(preset))}
+                  className={cn(
+                    "border-line bg-surface-subtle hover:border-accent/50 rounded-full border px-3 py-1 font-mono text-xs transition-colors",
+                    Number(amountInput.replace(",", ".")) === preset
+                      ? "border-accent text-accent"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {formatCurrencyAmount(preset, selectedCurrency)}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
           <div className="grid gap-3.5 sm:grid-cols-2">
             {mode === "dynamic" || !canUseStatic ? (
               <div>
@@ -305,17 +418,23 @@ export function CashinPanel({
               <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Ex.: Depósito carteira ou pedido #1042"
+                placeholder={isSelfDeposit ? "Ex.: Reserva em BRL" : "Ex.: Pedido #1042"}
                 className="bg-surface-subtle border-line text-foreground h-10 rounded-xl text-sm"
               />
             </div>
           </div>
 
-          <DynamicFields
-            fields={spec.cashinPayerFields}
-            values={payer}
-            onChange={(k, v) => setPayer((prev) => ({ ...prev, [k]: v }))}
-          />
+          {!isSelfDeposit ? (
+            <DynamicFields
+              fields={spec.cashinPayerFields}
+              values={payer}
+              onChange={(k, v) => setPayer((prev) => ({ ...prev, [k]: v }))}
+            />
+          ) : (
+            <p className="text-muted-foreground rounded-xl border border-emerald-400/20 bg-emerald-500/[0.06] px-3.5 py-2.5 text-[11px]">
+              Depósito direto na sua conta: seus dados cadastrais são preenchidos automaticamente e o valor entra no seu saldo disponível assim que o pagamento for confirmado.
+            </p>
+          )}
 
           {errorMsg ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-200">
@@ -326,7 +445,11 @@ export function CashinPanel({
           <div className="flex justify-end">
             <Button type="submit" disabled={submitting}>
               <ArrowDownLeft className="size-4" />
-              {submitting ? "Gerando instrução..." : `Gerar instrução em ${selectedCurrency}`}
+              {submitting
+                ? "Gerando..."
+                : isSelfDeposit
+                  ? `Gerar depósito em ${selectedCurrency}`
+                  : `Gerar cobrança em ${selectedCurrency}`}
             </Button>
           </div>
         </form>
@@ -342,19 +465,29 @@ export function CashinPanel({
               Instrução de depósito aparecerá aqui
             </p>
             <p className="text-muted-foreground text-xs">
-              Dependendo da moeda, exibiremos QR Code, Copia e Cola, CLABE, voucher OXXO, CVU argentino ou endereço cripto com valor micro-ajustado.
+              Dependendo da moeda, exibiremos QR Code Pix, Copia e Cola, CLABE, voucher OXXO, CVU argentino ou endereço cripto.
             </p>
           </Card>
         ) : (
           <Card className="space-y-4 p-5">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-foreground text-sm font-semibold">Instrução pronta</p>
-                {typeof cashinResult.status === "string" ? (
-                  <p className="text-muted-foreground text-xs">
-                    Status: <span className="text-accent font-mono">{cashinResult.status}</span>
-                  </p>
-                ) : null}
+                <p className="text-foreground text-sm font-semibold">
+                  {isPaid ? "Depósito confirmado" : "Instrução pronta"}
+                </p>
+                <p className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+                  {!isPaid && !isFailed ? <Loader2 className="size-3 animate-spin text-amber-300" /> : null}
+                  {isPaid ? <CheckCircle2 className="size-3.5 text-emerald-400" /> : null}
+                  Status:{" "}
+                  <span
+                    className={cn(
+                      "font-mono",
+                      isPaid ? "text-emerald-300" : isFailed ? "text-red-300" : "text-accent",
+                    )}
+                  >
+                    {normalizedLiveStatus}
+                  </span>
+                </p>
               </div>
               {typeof cashinResult.amount === "number" ? (
                 <span className="text-foreground font-mono text-sm font-semibold">
@@ -362,6 +495,12 @@ export function CashinPanel({
                 </span>
               ) : null}
             </div>
+
+            {isPaid ? (
+              <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-3.5 py-2.5 text-xs text-emerald-200">
+                Pagamento confirmado! O saldo disponível da sua carteira foi atualizado.
+              </div>
+            ) : null}
 
             {selectedCurrency === "USDT" || selectedCurrency === "USDC" ? (
               <p className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-200">

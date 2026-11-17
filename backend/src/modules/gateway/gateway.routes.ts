@@ -5,7 +5,10 @@ import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
 import { env } from "../../config/env.js";
+import { calculateFee, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
+import { BadRequestError, InsufficientFundsError, NotFoundError } from "../../lib/errors.js";
 import { generateTxRef } from "../../lib/id.js";
+import { assertWithdrawalLimits } from "../wallets/wallet.service.js";
 
 function verifyInternalSecret(request: FastifyRequest, reply: FastifyReply) {
   const header = String(request.headers["x-internal-secret"] ?? "");
@@ -42,6 +45,158 @@ async function ensureUserWallet(
       isDefault: false,
     },
   });
+}
+
+async function settleActivityInLedger(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  act: {
+    id: string;
+    userId: string;
+    kind: string;
+    currency: string;
+    rail: string | null;
+    amount: Decimal | null;
+    externalId: string | null;
+    transactionId: string | null;
+    e2e: string | null;
+    settledInLedger: boolean;
+    metadata: unknown;
+  },
+  opts: {
+    nextStatus: string;
+    settlementAmount?: number;
+    e2e?: string;
+    feeBps: number;
+  },
+) {
+  const normalizedStatus = opts.nextStatus.toLowerCase();
+  await tx.gatewayActivity.update({
+    where: { id: act.id },
+    data: {
+      status: opts.nextStatus,
+      e2e: opts.e2e ?? act.e2e,
+    },
+  });
+
+  if (act.settledInLedger) return;
+
+  const isSettledPaid = normalizedStatus === "paid" || normalizedStatus === "completed";
+  const isCashoutFailed =
+    normalizedStatus === "failed" ||
+    normalizedStatus === "cancelled" ||
+    normalizedStatus === "expired" ||
+    normalizedStatus === "rejected" ||
+    normalizedStatus === "returned";
+
+  if (act.kind === "cashin" && isSettledPaid) {
+    const grossNum = opts.settlementAmount ?? (act.amount ? Number(act.amount) : 0);
+    if (grossNum <= 0) return;
+
+    const claimed = await tx.gatewayActivity.updateMany({
+      where: { id: act.id, settledInLedger: false },
+      data: { settledInLedger: true },
+    });
+    if (claimed.count === 0) return;
+
+    const wallet = await ensureUserWallet(tx, act.userId, act.currency);
+    if (!wallet) return;
+
+    const metaObj =
+      act.metadata && typeof act.metadata === "object"
+        ? (act.metadata as Record<string, unknown>)
+        : undefined;
+    const isSelfDeposit = metaObj?.purpose === "self_deposit";
+
+    const gross = new Decimal(grossNum);
+    // Keep fee calculation consistent with platform feeBps (self deposits use 0 only if feeBps is 0).
+    const fee = gross.mul(opts.feeBps).div(10_000);
+    const net = gross.sub(fee);
+
+    await tx.wallet.update({
+      where: { id: wallet.id },
+      data: {
+        balance: { increment: net },
+        availableBalance: { increment: net },
+      },
+    });
+    await tx.transaction.create({
+      data: {
+        referenceId: generateTxRef(),
+        userId: act.userId,
+        type: "DEPOSIT",
+        status: "COMPLETED",
+        toWalletId: wallet.id,
+        amount: gross,
+        fee,
+        netAmount: net,
+        currencyCode: act.currency,
+        externalId: act.externalId ?? opts.e2e,
+        description: isSelfDeposit
+          ? `Depósito na conta (${act.rail ?? act.currency})`
+          : `Depósito XPag (${act.rail ?? act.currency})`,
+        completedAt: new Date(),
+      },
+    });
+    await tx.gatewayActivity.update({
+      where: { id: act.id },
+      data: { feeAmount: fee },
+    });
+    return;
+  }
+
+  if (act.kind === "cashout" && (isSettledPaid || isCashoutFailed)) {
+    const claimed = await tx.gatewayActivity.updateMany({
+      where: { id: act.id, settledInLedger: false },
+      data: { settledInLedger: true },
+    });
+    if (claimed.count === 0) return;
+
+    if (!act.externalId) return;
+    const reservedTx = await tx.transaction.findFirst({
+      where: {
+        userId: act.userId,
+        externalId: act.externalId,
+        type: "WITHDRAWAL",
+        status: "PROCESSING",
+      },
+    });
+    if (!reservedTx || !reservedTx.fromWalletId) return;
+
+    const now = new Date();
+    if (isSettledPaid) {
+      await tx.wallet.update({
+        where: { id: reservedTx.fromWalletId },
+        data: {
+          balance: { decrement: reservedTx.amount },
+          frozenBalance: { decrement: reservedTx.amount },
+        },
+      });
+      await tx.transaction.update({
+        where: { id: reservedTx.id },
+        data: {
+          status: "COMPLETED",
+          completedAt: now,
+          txHash: opts.e2e ?? reservedTx.txHash,
+        },
+      });
+    } else {
+      await tx.wallet.update({
+        where: { id: reservedTx.fromWalletId },
+        data: {
+          frozenBalance: { decrement: reservedTx.amount },
+          availableBalance: { increment: reservedTx.amount },
+        },
+      });
+      await tx.transaction.update({
+        where: { id: reservedTx.id },
+        data: {
+          status: "FAILED",
+          failedAt: now,
+          flagReason: `Cashout ${normalizedStatus} by provider`,
+        },
+      });
+    }
+  }
 }
 
 export async function gatewayRoutes(app: FastifyInstance) {
@@ -458,60 +613,12 @@ export async function gatewayRoutes(app: FastifyInstance) {
 
     for (const act of matchingActivities) {
       await prisma.$transaction(async (tx) => {
-        await tx.gatewayActivity.update({
-          where: { id: act.id },
-          data: {
-            status: nextStatus,
-            e2e: body.e2e ?? act.e2e,
-          },
+        await settleActivityInLedger(tx, act, {
+          nextStatus,
+          settlementAmount: body.amount,
+          e2e: body.e2e,
+          feeBps: settings.feeBps,
         });
-
-        // Credit user's internal Wallet ledger atomically when cash-in settles for the first time.
-        const isSettledPaid = nextStatus === "paid" || nextStatus === "completed";
-        const settlementAmount = body.amount ?? (act.amount ? Number(act.amount) : 0);
-        if (
-          act.kind === "cashin" &&
-          isSettledPaid &&
-          !act.settledInLedger &&
-          settlementAmount > 0
-        ) {
-          const wallet = await ensureUserWallet(tx, act.userId, act.currency);
-          if (wallet) {
-            const gross = new Decimal(settlementAmount);
-            const fee = gross.mul(settings.feeBps).div(10_000);
-            const net = gross.sub(fee);
-            await tx.wallet.update({
-              where: { id: wallet.id },
-              data: {
-                balance: { increment: net },
-                availableBalance: { increment: net },
-              },
-            });
-            await tx.transaction.create({
-              data: {
-                referenceId: generateTxRef(),
-                userId: act.userId,
-                type: "DEPOSIT",
-                status: "COMPLETED",
-                toWalletId: wallet.id,
-                amount: gross,
-                fee,
-                netAmount: net,
-                currencyCode: act.currency,
-                externalId: act.externalId ?? body.e2e,
-                description: `Depósito XPag (${act.rail ?? act.currency})`,
-                completedAt: new Date(),
-              },
-            });
-            await tx.gatewayActivity.update({
-              where: { id: act.id },
-              data: {
-                settledInLedger: true,
-                feeAmount: fee,
-              },
-            });
-          }
-        }
       });
 
       const cred = await prisma.gatewayCredential.findUnique({
@@ -563,13 +670,255 @@ export async function gatewayRoutes(app: FastifyInstance) {
       },
     });
 
+    const settings = await prisma.platformSetting.upsert({
+      where: { id: "default" },
+      update: {},
+      create: { id: "default" },
+    });
+
     for (const act of matched) {
-      await prisma.gatewayActivity.update({
-        where: { id: act.id },
-        data: { status: body.status, e2e: body.e2e ?? act.e2e },
+      await prisma.$transaction(async (tx) => {
+        await settleActivityInLedger(tx, act, {
+          nextStatus: body.status,
+          e2e: body.e2e,
+          feeBps: settings.feeBps,
+        });
       });
     }
     return { updated: matched.length > 0 };
+  });
+
+  // ── User Ledger (per-user balances, cashout reservation, conversion settlement) ──
+  app.get("/ledger/:userId/balances", async (request) => {
+    const { userId } = request.params as { userId: string };
+    const [wallets, settings, profile] = await Promise.all([
+      prisma.wallet.findMany({
+        where: { userId, isActive: true },
+        include: { currency: { select: { code: true } } },
+      }),
+      prisma.platformSetting.upsert({
+        where: { id: "default" },
+        update: {},
+        create: { id: "default" },
+      }),
+      prisma.userProfile.findUnique({
+        where: { userId },
+        select: { kycLevel: true, kycStatus: true },
+      }),
+    ]);
+
+    const balances: Record<string, { available: number; blocked: number }> = {};
+    for (const w of wallets) {
+      const code = w.currency.code;
+      const cur = balances[code] ?? { available: 0, blocked: 0 };
+      cur.available += Number(w.availableBalance);
+      cur.blocked += Number(w.frozenBalance);
+      balances[code] = cur;
+    }
+
+    const blockedCurrencies = Array.isArray(settings.disabledCurrencies)
+      ? (settings.disabledCurrencies as string[])
+      : [];
+
+    return {
+      balances,
+      blocked_currencies: blockedCurrencies,
+      environmentMode: settings.environmentMode,
+      kycLevel: profile?.kycLevel ?? 0,
+      kycStatus: profile?.kycStatus ?? "NOT_STARTED",
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  app.post("/ledger/reserve-cashout", async (request) => {
+    const body = z
+      .object({
+        userId: z.string().uuid(),
+        currency: z.string().trim().min(2).max(10),
+        amount: z.number().positive(),
+        externalId: z.string().trim().min(3).max(128),
+        rail: z.string().trim().optional(),
+        description: z.string().trim().max(255).optional(),
+      })
+      .parse(request.body);
+
+    const amount = toDecimal(body.amount);
+    await assertWithdrawalLimits(body.userId, body.currency, amount);
+
+    const feeConfig = await prisma.feeConfig.findUnique({
+      where: {
+        transactionType_currencyCode: {
+          transactionType: "WITHDRAWAL",
+          currencyCode: body.currency,
+        },
+      },
+    });
+    const fee = feeConfig
+      ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
+      : decimalZero();
+    const netAmount = decimalSub(amount, fee);
+    const refId = generateTxRef();
+
+    const reserved = await prisma.$transaction(async (tx) => {
+      const wallet = await tx.wallet.findFirst({
+        where: { userId: body.userId, currency: { code: body.currency }, isActive: true },
+      });
+      if (!wallet) {
+        throw new InsufficientFundsError(`Saldo insuficiente em ${body.currency}. Deposite antes de sacar.`);
+      }
+
+      const debited = await tx.wallet.updateMany({
+        where: { id: wallet.id, availableBalance: { gte: amount } },
+        data: {
+          availableBalance: { decrement: amount },
+          frozenBalance: { increment: amount },
+        },
+      });
+      if (debited.count === 0) {
+        throw new InsufficientFundsError(`Saldo disponível insuficiente em ${body.currency}.`);
+      }
+
+      const txRow = await tx.transaction.create({
+        data: {
+          referenceId: refId,
+          userId: body.userId,
+          type: "WITHDRAWAL",
+          status: "PROCESSING",
+          fromWalletId: wallet.id,
+          amount,
+          fee,
+          netAmount,
+          currencyCode: body.currency,
+          externalId: body.externalId,
+          description: body.description ?? `Saque XPag (${body.rail ?? body.currency})`,
+          processedAt: new Date(),
+        },
+      });
+
+      return { txId: txRow.id, referenceId: refId };
+    });
+
+    return { ok: true, ...reserved };
+  });
+
+  app.post("/ledger/release-cashout", async (request) => {
+    const body = z
+      .object({
+        userId: z.string().uuid(),
+        externalId: z.string().trim().min(3).max(128),
+        reason: z.string().trim().max(255).optional(),
+      })
+      .parse(request.body);
+
+    const released = await prisma.$transaction(async (tx) => {
+      const row = await tx.transaction.findFirst({
+        where: {
+          userId: body.userId,
+          externalId: body.externalId,
+          type: "WITHDRAWAL",
+          status: "PROCESSING",
+        },
+      });
+      if (!row || !row.fromWalletId) return false;
+
+      const updated = await tx.transaction.updateMany({
+        where: { id: row.id, status: "PROCESSING" },
+        data: {
+          status: "FAILED",
+          failedAt: new Date(),
+          flagReason: body.reason ?? "Provider rejected cashout",
+        },
+      });
+      if (updated.count === 0) return false;
+
+      await tx.wallet.update({
+        where: { id: row.fromWalletId },
+        data: {
+          frozenBalance: { decrement: row.amount },
+          availableBalance: { increment: row.amount },
+        },
+      });
+      return true;
+    });
+
+    return { ok: true, released };
+  });
+
+  app.post("/ledger/settle-conversion", async (request) => {
+    const body = z
+      .object({
+        userId: z.string().uuid(),
+        fromCurrency: z.string().trim().min(2).max(10),
+        toCurrency: z.string().trim().min(2).max(10),
+        fromAmount: z.number().positive(),
+        toAmount: z.number().positive(),
+        rate: z.number().positive().optional(),
+        externalId: z.string().trim().min(3).max(128),
+      })
+      .parse(request.body);
+
+    const fromDec = toDecimal(body.fromAmount);
+    const toDec = toDecimal(body.toAmount);
+
+    if (body.fromCurrency === body.toCurrency) {
+      throw new BadRequestError("Moedas de origem e destino devem ser diferentes.");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const fromWallet = await tx.wallet.findFirst({
+        where: { userId: body.userId, currency: { code: body.fromCurrency }, isActive: true },
+      });
+      if (!fromWallet) {
+        throw new InsufficientFundsError(`Saldo insuficiente em ${body.fromCurrency}.`);
+      }
+
+      const debited = await tx.wallet.updateMany({
+        where: { id: fromWallet.id, availableBalance: { gte: fromDec } },
+        data: {
+          balance: { decrement: fromDec },
+          availableBalance: { decrement: fromDec },
+        },
+      });
+      if (debited.count === 0) {
+        throw new InsufficientFundsError(`Saldo disponível insuficiente em ${body.fromCurrency}.`);
+      }
+
+      const toWallet = await ensureUserWallet(tx, body.userId, body.toCurrency);
+      if (!toWallet) {
+        throw new NotFoundError(`Currency ${body.toCurrency}`);
+      }
+
+      await tx.wallet.update({
+        where: { id: toWallet.id },
+        data: {
+          balance: { increment: toDec },
+          availableBalance: { increment: toDec },
+        },
+      });
+
+      await tx.transaction.create({
+        data: {
+          referenceId: generateTxRef(),
+          userId: body.userId,
+          type: "EXCHANGE",
+          status: "COMPLETED",
+          fromWalletId: fromWallet.id,
+          toWalletId: toWallet.id,
+          amount: fromDec,
+          fee: decimalZero(),
+          netAmount: fromDec,
+          currencyCode: body.fromCurrency,
+          exchangeRate: body.rate ? toDecimal(body.rate) : null,
+          toCurrencyCode: body.toCurrency,
+          toAmount: toDec,
+          externalId: body.externalId,
+          description: `Conversão ${body.fromCurrency} → ${body.toCurrency}`,
+          completedAt: new Date(),
+        },
+      });
+    });
+
+    return { ok: true };
   });
 
   // ── API Logs ──
