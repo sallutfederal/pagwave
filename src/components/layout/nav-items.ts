@@ -5,6 +5,7 @@ import {
   KeyRound,
   LayoutGrid,
   LogOut,
+  MessageSquare,
   Plug,
   Shield,
   Sliders,
@@ -28,6 +29,7 @@ export const mainNav: NavItem[] = [
 
 export const secondaryNav: NavItem[] = [
   { href: "/integrations", label: "Integrações", icon: Plug },
+  { href: "/messages", label: "Suporte", icon: MessageSquare },
 ];
 
 export const adminNav: NavItem[] = [

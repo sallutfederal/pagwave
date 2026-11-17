@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../../config/database.js";
 import { BadRequestError, NotFoundError } from "../../lib/errors.js";
 import { adminGuard } from "../../middleware/auth.js";
+import { confirmDeposit, rejectDeposit } from "../wallets/wallet.service.js";
 
 const updateAdminUserSchema = z.object({
   role: z.enum(["USER", "ADMIN", "SUPER_ADMIN"]).optional(),
@@ -152,7 +153,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get("/kyc", async () => {
     const docs = await prisma.kycDocument.findMany({
-      include: {
+      select: {
+        id: true,
+        userId: true,
+        type: true,
+        status: true,
+        fileUrl: true,
+        fileName: true,
+        mimeType: true,
+        fileSize: true,
+        reviewNote: true,
+        createdAt: true,
+        reviewedAt: true,
         user: {
           select: {
             id: true,
@@ -177,6 +189,9 @@ export async function adminRoutes(app: FastifyInstance) {
         type: d.type,
         status: d.status,
         fileUrl: d.fileUrl,
+        fileName: d.fileName,
+        mimeType: d.mimeType,
+        fileSize: d.fileSize,
         reviewNote: d.reviewNote,
         createdAt: d.createdAt.toISOString(),
         reviewedAt: d.reviewedAt?.toISOString() ?? null,
@@ -282,6 +297,26 @@ export async function adminRoutes(app: FastifyInstance) {
     });
 
     return { fee };
+  });
+
+  app.post("/deposits/:referenceId/confirm", async (request) => {
+    const admin = request.user as { id: string };
+    const { referenceId } = request.params as { referenceId: string };
+    const body = z
+      .object({ externalId: z.string().trim().max(255).optional() })
+      .parse(request.body ?? {});
+
+    return confirmDeposit(referenceId, admin.id, body);
+  });
+
+  app.post("/deposits/:referenceId/reject", async (request) => {
+    const admin = request.user as { id: string };
+    const { referenceId } = request.params as { referenceId: string };
+    const body = z
+      .object({ reason: z.string().trim().max(500).optional() })
+      .parse(request.body ?? {});
+
+    return rejectDeposit(referenceId, admin.id, body.reason);
   });
 }
 

@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
+import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
-import { BadRequestError, UnauthorizedError } from "../../lib/errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "../../lib/errors.js";
 import { authGuard } from "../../middleware/auth.js";
 import { generateId } from "../../lib/id.js";
 import {
@@ -329,12 +330,34 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   // ─── GET / POST /auth/kyc ─────────────────────────────────────────────
+  const ALLOWED_KYC_MIME_TYPES = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+  ]);
+  const MAX_KYC_FILE_BYTES = 5 * 1024 * 1024;
+
   app.get("/kyc", { preHandler: [authGuard] }, async (request) => {
     const user = request.user as { id: string };
     const [profile, documents] = await Promise.all([
       prisma.userProfile.findUnique({ where: { userId: user.id } }),
       prisma.kycDocument.findMany({
         where: { userId: user.id },
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          status: true,
+          fileUrl: true,
+          fileName: true,
+          fileHash: true,
+          mimeType: true,
+          fileSize: true,
+          reviewNote: true,
+          reviewedAt: true,
+          createdAt: true,
+        },
         orderBy: { createdAt: "desc" },
       }),
     ]);
@@ -350,68 +373,160 @@ export async function authRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/kyc", { preHandler: [authGuard] }, async (request, reply) => {
-    const user = request.user as { id: string; email: string };
-    const body = z
-      .object({
-        type: z.enum([
-          "IDENTITY_FRONT",
-          "IDENTITY_BACK",
-          "PASSPORT",
-          "SELFIE",
-          "PROOF_OF_ADDRESS",
-          "CORPORATE_REGISTRATION",
-          "TAX_ID",
-        ]),
-        fileUrl: z.string().trim().min(3).max(500),
-        mimeType: z.string().trim().max(50).optional(),
-        documentNumber: z.string().trim().max(100).optional(),
-      })
-      .parse(request.body);
+  app.get("/kyc/:docId/file", { preHandler: [authGuard] }, async (request, reply) => {
+    const user = request.user as { id: string; role?: string };
+    const { docId } = request.params as { docId: string };
 
-    const doc = await prisma.kycDocument.create({
-      data: {
-        userId: user.id,
-        type: body.type,
-        status: "PENDING",
-        fileUrl: body.fileUrl,
-        mimeType: body.mimeType ?? "application/octet-stream",
-        providerResult: body.documentNumber ? { documentNumber: body.documentNumber } : undefined,
+    const doc = await prisma.kycDocument.findUnique({
+      where: { id: docId },
+      select: {
+        id: true,
+        userId: true,
+        fileName: true,
+        mimeType: true,
+        fileData: true,
       },
     });
 
-    await prisma.userProfile.upsert({
-      where: { userId: user.id },
-      update: {
-        kycStatus: "PENDING",
-        kycSubmittedAt: new Date(),
-      },
-      create: {
-        userId: user.id,
-        firstName: user.email.split("@")[0] ?? "User",
-        lastName: "",
-        kycStatus: "PENDING",
-        kycSubmittedAt: new Date(),
-      },
-    });
+    if (!doc || !doc.fileData) {
+      throw new NotFoundError("KYC file");
+    }
 
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: "KYC_SUBMIT",
-        resource: "kyc_document",
-        resourceId: doc.id,
-        details: { type: body.type },
-      },
-    });
+    const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
+    if (doc.userId !== user.id && !isAdmin) {
+      throw new ForbiddenError("You do not have permission to view this document.");
+    }
 
-    reply.status(201).send({
-      document: {
-        ...doc,
-        createdAt: doc.createdAt.toISOString(),
-      },
-    });
+    const safeName = (doc.fileName ?? `kyc-${doc.id}`).replace(/[^a-zA-Z0-9._-]/g, "_");
+    return reply
+      .header("Content-Type", doc.mimeType ?? "application/octet-stream")
+      .header("Content-Disposition", `inline; filename="${safeName}"`)
+      .header("Cache-Control", "private, no-store")
+      .send(Buffer.from(doc.fileData));
   });
+
+  app.post(
+    "/kyc",
+    { preHandler: [authGuard], bodyLimit: 8 * 1024 * 1024 },
+    async (request, reply) => {
+      const user = request.user as { id: string; email: string };
+      const body = z
+        .object({
+          type: z.enum([
+            "IDENTITY_FRONT",
+            "IDENTITY_BACK",
+            "PASSPORT",
+            "SELFIE",
+            "PROOF_OF_ADDRESS",
+            "CORPORATE_REGISTRATION",
+            "TAX_ID",
+          ]),
+          fileUrl: z.string().trim().min(3).max(500).optional(),
+          fileName: z.string().trim().min(1).max(255).optional(),
+          mimeType: z.string().trim().max(50).optional(),
+          fileBase64: z.string().trim().min(4).optional(),
+          documentNumber: z.string().trim().max(100).optional(),
+        })
+        .parse(request.body);
+
+      let fileBuffer: Buffer | null = null;
+      let fileHash: string | null = null;
+      let mimeType = body.mimeType ?? "application/octet-stream";
+      let fileSize: number | null = null;
+
+      if (body.fileBase64) {
+        if (!ALLOWED_KYC_MIME_TYPES.has(mimeType)) {
+          throw new BadRequestError("Formato inválido. Envie JPG, PNG, WebP ou PDF.");
+        }
+        fileBuffer = Buffer.from(body.fileBase64, "base64");
+        if (fileBuffer.length === 0 || fileBuffer.length > MAX_KYC_FILE_BYTES) {
+          throw new BadRequestError("O arquivo deve ter entre 1 byte e 5 MB.");
+        }
+        fileHash = createHash("sha256").update(fileBuffer).digest("hex");
+        fileSize = fileBuffer.length;
+      } else if (!body.fileUrl) {
+        throw new BadRequestError("Envie um arquivo de documento válido.");
+      }
+
+      const created = await prisma.kycDocument.create({
+        data: {
+          userId: user.id,
+          type: body.type,
+          status: "PENDING",
+          fileUrl: body.fileUrl ?? "pending://internal",
+          fileName: body.fileName ?? null,
+          fileHash,
+          mimeType,
+          fileSize,
+          fileData: fileBuffer ? new Uint8Array(fileBuffer) : null,
+          providerResult: body.documentNumber ? { documentNumber: body.documentNumber } : undefined,
+        },
+        select: {
+          id: true,
+          userId: true,
+          type: true,
+          status: true,
+          fileUrl: true,
+          fileName: true,
+          fileHash: true,
+          mimeType: true,
+          fileSize: true,
+          createdAt: true,
+        },
+      });
+
+      const doc = fileBuffer
+        ? await prisma.kycDocument.update({
+            where: { id: created.id },
+            data: { fileUrl: `/api/auth/kyc/files/${created.id}` },
+            select: {
+              id: true,
+              userId: true,
+              type: true,
+              status: true,
+              fileUrl: true,
+              fileName: true,
+              fileHash: true,
+              mimeType: true,
+              fileSize: true,
+              createdAt: true,
+            },
+          })
+        : created;
+
+      await prisma.userProfile.upsert({
+        where: { userId: user.id },
+        update: {
+          kycStatus: "PENDING",
+          kycSubmittedAt: new Date(),
+        },
+        create: {
+          userId: user.id,
+          firstName: user.email.split("@")[0] ?? "User",
+          lastName: "",
+          kycStatus: "PENDING",
+          kycSubmittedAt: new Date(),
+        },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "KYC_SUBMIT",
+          resource: "kyc_document",
+          resourceId: doc.id,
+          details: { type: body.type, fileName: doc.fileName, fileSize: doc.fileSize },
+        },
+      });
+
+      reply.status(201).send({
+        document: {
+          ...doc,
+          createdAt: doc.createdAt.toISOString(),
+        },
+      });
+    },
+  );
 
   // ─── DELETE /auth/account ─────────────────────────────────────────────
   app.delete("/account", { preHandler: [authGuard] }, async (request, reply) => {

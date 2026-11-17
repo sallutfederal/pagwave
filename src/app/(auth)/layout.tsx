@@ -71,15 +71,15 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               Systems Operational
             </span>
             <span className="text-white/20">·</span>
-            <Link href="/" className="hover:text-white transition-colors">
+            <Link href="/privacy" className="hover:text-white transition-colors">
               Privacy Policy
             </Link>
             <span className="text-white/20">·</span>
-            <Link href="/" className="hover:text-white transition-colors">
+            <Link href="/terms" className="hover:text-white transition-colors">
               Terms of Service
             </Link>
             <span className="text-white/20">·</span>
-            <Link href="/" className="hover:text-white transition-colors">
+            <Link href="/terms#security" className="hover:text-white transition-colors">
               Security
             </Link>
           </div>

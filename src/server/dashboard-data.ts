@@ -1,4 +1,3 @@
-import { cacheLife } from "next/cache";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { z } from "zod";
@@ -281,22 +280,12 @@ export async function getStatistic(period: Period) {
   });
 }
 
-/* -------------------------------------------------------------------------- */
-/*                       Not connected yet (phases 3 and 4)                   */
-/*                                                                            */
-/* Sales and messages belong to the merchant/checkout module.               */
-/* They stay empty (the UI renders its own empty states) and, having          */
-/* no per-user data, can keep being cached.                                   */
-/* -------------------------------------------------------------------------- */
-
 const quickActions = [
   { id: "transfer", label: "Transfer", active: true },
   { id: "utility", label: "Utility", active: false },
   { id: "taxes", label: "Taxes", active: false },
   { id: "transport", label: "Transport", active: false },
 ] as const;
-
-const conversations: Conversation[] = [];
 
 export async function getRecentSales() {
   const user = await getCurrentUser();
@@ -329,11 +318,11 @@ export async function getRecentSales() {
   return recentSalesSchema.parse({ sales: rows });
 }
 
-export async function getConversations() {
-  "use cache";
-  cacheLife("hours");
+export async function getConversations(scope?: "user" | "admin") {
+  const query = scope === "admin" ? "?scope=admin" : "";
+  const data = await authed<{ conversations: Conversation[] }>(`/support/threads${query}`);
 
-  return conversationsSchema.parse({ conversations: conversations.map((item) => ({ ...item })) });
+  return conversationsSchema.parse({ conversations: data.conversations });
 }
 
 /* -------------------------------------------------------------------------- */

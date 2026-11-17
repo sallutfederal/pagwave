@@ -482,11 +482,11 @@ export function RegisterForm() {
 
       <p className="text-center text-xs leading-relaxed text-white/40">
         {t.legalPrefix}{" "}
-        <Link href="/" className="text-white/60 underline underline-offset-2 hover:text-white/85">
+        <Link href="/terms" className="text-white/60 underline underline-offset-2 hover:text-white/85">
           {t.terms}
         </Link>{" "}
         {t.legalJoin}{" "}
-        <Link href="/" className="text-white/60 underline underline-offset-2 hover:text-white/85">
+        <Link href="/privacy" className="text-white/60 underline underline-offset-2 hover:text-white/85">
           {t.privacy}
         </Link>
         .

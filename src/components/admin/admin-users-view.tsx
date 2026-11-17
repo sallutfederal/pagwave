@@ -48,6 +48,8 @@ type AdminKycDoc = {
   type: string;
   status: string;
   fileUrl: string;
+  fileName?: string | null;
+  fileSize?: number | null;
   reviewNote: string | null;
   createdAt: string;
 };
@@ -363,7 +365,21 @@ export function AdminUsersView() {
                     <span className="font-mono text-accent">{doc.type}</span>
                   </p>
                   <p className="text-muted-foreground truncate font-mono text-[11px]">
-                    Arquivo/Referência: {doc.fileUrl}
+                    Arquivo: {doc.fileName ?? doc.fileUrl}
+                    {doc.fileSize ? ` (${Math.max(1, Math.round(doc.fileSize / 1024))} KB)` : ""}
+                    {doc.fileUrl.startsWith("/") || doc.fileUrl.startsWith("http") ? (
+                      <>
+                        {" · "}
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-accent underline underline-offset-2"
+                        >
+                          Visualizar
+                        </a>
+                      </>
+                    ) : null}
                   </p>
                 </div>
 

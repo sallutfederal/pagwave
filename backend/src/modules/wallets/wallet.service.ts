@@ -1,7 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../../config/database.js";
-import { calculateFee, decimalGte, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
+import { calculateFee, decimalAdd, decimalGte, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
 import {
   BadRequestError,
   ConflictError,
@@ -262,7 +262,7 @@ export async function internalTransfer(userId: string, input: TransferInput) {
   };
 }
 
-// ─── Deposit (simulated — real implementation connects to payment gateway) ──
+// ─── Deposit (creates PENDING request; balance is only credited on confirmation) ─
 
 export async function createDeposit(userId: string, input: DepositInput) {
   const wallet = await prisma.wallet.findFirst({
@@ -273,34 +273,28 @@ export async function createDeposit(userId: string, input: DepositInput) {
   if (!wallet) throw new NotFoundError("Wallet");
 
   const amount = toDecimal(input.amount);
+  if (wallet.currency.minimumDeposit && amount.lt(wallet.currency.minimumDeposit)) {
+    throw new BadRequestError(
+      `Minimum deposit for ${wallet.currency.code} is ${wallet.currency.minimumDeposit.toString()}.`,
+    );
+  }
+
   const refId = generateTxRef();
 
-  // In production this would create a pending deposit and wait for webhook
-  // For now we simulate instant completion
-  await prisma.$transaction([
-    prisma.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        balance: { increment: amount },
-        availableBalance: { increment: amount },
-      },
-    }),
-    prisma.transaction.create({
-      data: {
-        referenceId: refId,
-        userId,
-        type: "DEPOSIT",
-        status: "COMPLETED",
-        toWalletId: wallet.id,
-        amount,
-        fee: decimalZero(),
-        netAmount: amount,
-        currencyCode: wallet.currency.code,
-        description: `Deposit via ${input.method}`,
-        completedAt: new Date(),
-      },
-    }),
-  ]);
+  await prisma.transaction.create({
+    data: {
+      referenceId: refId,
+      userId,
+      type: "DEPOSIT",
+      status: "PENDING",
+      toWalletId: wallet.id,
+      amount,
+      fee: decimalZero(),
+      netAmount: amount,
+      currencyCode: wallet.currency.code,
+      description: `Deposit via ${input.method}`,
+    },
+  });
 
   await prisma.auditLog.create({
     data: {
@@ -308,7 +302,7 @@ export async function createDeposit(userId: string, input: DepositInput) {
       action: "DEPOSIT",
       resource: "transaction",
       resourceId: refId,
-      details: { amount: amount.toString(), currency: wallet.currency.code, method: input.method },
+      details: { amount: amount.toString(), currency: wallet.currency.code, method: input.method, status: "PENDING" },
     },
   });
 
@@ -316,11 +310,126 @@ export async function createDeposit(userId: string, input: DepositInput) {
     referenceId: refId,
     amount: amount.toString(),
     currencyCode: wallet.currency.code,
-    status: "COMPLETED",
+    status: "PENDING",
+  };
+}
+
+export async function confirmDeposit(
+  referenceId: string,
+  reviewerId: string,
+  options?: { externalId?: string },
+) {
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.transaction.findUnique({
+      where: { referenceId },
+    });
+
+    if (!existing || existing.type !== "DEPOSIT") {
+      throw new NotFoundError("Deposit transaction");
+    }
+
+    if (!existing.toWalletId) {
+      throw new BadRequestError("Deposit transaction has no destination wallet.");
+    }
+
+    // Claim transition atomically so concurrent confirmations cannot double-credit.
+    const claimed = await tx.transaction.updateMany({
+      where: {
+        id: existing.id,
+        status: { in: ["PENDING", "PROCESSING"] },
+      },
+      data: {
+        status: "COMPLETED",
+        completedAt: now,
+        reviewedBy: reviewerId,
+        reviewedAt: now,
+        ...(options?.externalId ? { externalId: options.externalId } : {}),
+      },
+    });
+
+    if (claimed.count === 0) {
+      throw new ConflictError("Deposit was already settled or cancelled.");
+    }
+
+    await tx.wallet.update({
+      where: { id: existing.toWalletId },
+      data: {
+        balance: { increment: existing.netAmount },
+        availableBalance: { increment: existing.netAmount },
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        userId: reviewerId,
+        action: "DEPOSIT",
+        resource: "transaction",
+        resourceId: existing.referenceId,
+        details: {
+          status: "COMPLETED",
+          targetUserId: existing.userId,
+          credited: existing.netAmount.toString(),
+          currency: existing.currencyCode,
+        },
+      },
+    });
+
+    return {
+      referenceId: existing.referenceId,
+      status: "COMPLETED",
+      credited: existing.netAmount.toString(),
+      currencyCode: existing.currencyCode,
+    };
+  });
+}
+
+export async function rejectDeposit(referenceId: string, reviewerId: string, reason?: string) {
+  const now = new Date();
+
+  const existing = await prisma.transaction.findUnique({ where: { referenceId } });
+  if (!existing || existing.type !== "DEPOSIT") {
+    throw new NotFoundError("Deposit transaction");
+  }
+
+  const claimed = await prisma.transaction.updateMany({
+    where: {
+      id: existing.id,
+      status: { in: ["PENDING", "PROCESSING"] },
+    },
+    data: {
+      status: "FAILED",
+      failedAt: now,
+      reviewedBy: reviewerId,
+      reviewedAt: now,
+      flagReason: reason ?? "Deposit not confirmed.",
+    },
+  });
+
+  if (claimed.count === 0) {
+    throw new ConflictError("Deposit was already settled or cancelled.");
+  }
+
+  await prisma.auditLog.create({
+    data: {
+      userId: reviewerId,
+      action: "ADMIN_ACTION",
+      resource: "transaction",
+      resourceId: existing.referenceId,
+      details: { status: "FAILED", reason: reason ?? "Deposit not confirmed." },
+    },
+  });
+
+  return {
+    referenceId: existing.referenceId,
+    status: "FAILED",
   };
 }
 
 // ─── Withdrawal ─────────────────────────────────────────────────────────────
+
+const ACTIVE_WITHDRAWAL_STATUSES = ["PENDING", "PROCESSING", "COMPLETED", "FROZEN"] as const;
 
 export async function createWithdrawal(userId: string, input: WithdrawalInput) {
   const wallet = await prisma.wallet.findFirst({
@@ -332,7 +441,7 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
 
   const amount = toDecimal(input.amount);
 
-  // Check KYC level
+  // Check KYC level & withdrawal limits (single, daily, monthly)
   const profile = await prisma.userProfile.findUnique({ where: { userId } });
   const kycLevel = profile?.kycLevel ?? 0;
 
@@ -344,7 +453,43 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
     if (amount.gt(limit.singleTxMax)) {
       throw new WithdrawalLimitError("single", limit.singleTxMax.toString());
     }
-    // TODO: check daily/monthly accumulated withdrawals
+
+    const now = new Date();
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+
+    const [dailyAgg, monthlyAgg] = await Promise.all([
+      prisma.transaction.aggregate({
+        _sum: { amount: true },
+        where: {
+          userId,
+          type: "WITHDRAWAL",
+          currencyCode: wallet.currency.code,
+          status: { in: [...ACTIVE_WITHDRAWAL_STATUSES] },
+          createdAt: { gte: dayStart },
+        },
+      }),
+      prisma.transaction.aggregate({
+        _sum: { amount: true },
+        where: {
+          userId,
+          type: "WITHDRAWAL",
+          currencyCode: wallet.currency.code,
+          status: { in: [...ACTIVE_WITHDRAWAL_STATUSES] },
+          createdAt: { gte: monthStart },
+        },
+      }),
+    ]);
+
+    const dailyUsed = dailyAgg._sum.amount ?? decimalZero();
+    if (decimalAdd(dailyUsed, amount).gt(limit.dailyLimit)) {
+      throw new WithdrawalLimitError("daily", limit.dailyLimit.toString());
+    }
+
+    const monthlyUsed = monthlyAgg._sum.amount ?? decimalZero();
+    if (decimalAdd(monthlyUsed, amount).gt(limit.monthlyLimit)) {
+      throw new WithdrawalLimitError("monthly", limit.monthlyLimit.toString());
+    }
   }
 
   // Check balance
@@ -369,16 +514,20 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
   const netAmount = decimalSub(amount, fee);
   const refId = generateTxRef();
 
-  // Freeze the amount (pending withdrawal)
-  await prisma.$transaction([
-    prisma.wallet.update({
-      where: { id: wallet.id },
+  // Freeze the amount atomically (guarded against concurrent overdraft)
+  await prisma.$transaction(async (tx) => {
+    const debited = await tx.wallet.updateMany({
+      where: { id: wallet.id, availableBalance: { gte: amount } },
       data: {
         availableBalance: { decrement: amount },
         frozenBalance: { increment: amount },
       },
-    }),
-    prisma.transaction.create({
+    });
+    if (debited.count === 0) {
+      throw new InsufficientFundsError();
+    }
+
+    await tx.transaction.create({
       data: {
         referenceId: refId,
         userId,
@@ -393,8 +542,8 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
         network: input.network ?? null,
         processedAt: new Date(),
       },
-    }),
-  ]);
+    });
+  });
 
   // Audit
   await prisma.auditLog.create({

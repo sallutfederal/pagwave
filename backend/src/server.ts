@@ -14,6 +14,7 @@ import { adminRoutes } from "./modules/admin/admin.routes.js";
 import { authRoutes } from "./modules/auth/auth.routes.js";
 import { cardRoutes } from "./modules/cards/card.routes.js";
 import { gatewayRoutes } from "./modules/gateway/gateway.routes.js";
+import { supportRoutes } from "./modules/support/support.routes.js";
 import { transactionRoutes } from "./modules/transactions/transaction.routes.js";
 import { walletRoutes } from "./modules/wallets/wallet.routes.js";
 
@@ -129,6 +130,7 @@ function buildServer() {
   void app.register(cardRoutes, { prefix: `${env.API_PREFIX}/cards` });
   void app.register(adminRoutes, { prefix: `${env.API_PREFIX}/admin` });
   void app.register(gatewayRoutes, { prefix: `${env.API_PREFIX}/gateway` });
+  void app.register(supportRoutes, { prefix: `${env.API_PREFIX}/support` });
 
   return app;
 }

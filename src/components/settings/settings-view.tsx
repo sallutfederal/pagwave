@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
+  ExternalLink,
   FileCheck2,
   KeyRound,
   LogOut,
@@ -13,6 +14,8 @@ import {
   Sun,
   SunMoon,
   Trash2,
+  UploadCloud,
+  X,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -44,6 +47,8 @@ type KycDoc = {
   type: string;
   status: string;
   fileUrl: string;
+  fileName?: string | null;
+  fileSize?: number | null;
   reviewNote?: string | null;
   createdAt: string;
 };
@@ -94,7 +99,8 @@ export function SettingsView() {
   const [kycDocs, setKycDocs] = useState<KycDoc[]>([]);
   const [kycType, setKycType] = useState("IDENTITY_FRONT");
   const [kycDocNumber, setKycDocNumber] = useState("");
-  const [kycFileRef, setKycFileRef] = useState("");
+  const [kycFile, setKycFile] = useState<File | null>(null);
+  const kycInputRef = useRef<HTMLInputElement>(null);
   const [submittingKyc, setSubmittingKyc] = useState(false);
   const [kycMsg, setKycMsg] = useState<string | null>(null);
 
@@ -201,18 +207,30 @@ export function SettingsView() {
 
   async function handleSubmitKyc(e: React.FormEvent) {
     e.preventDefault();
-    setSubmittingKyc(true);
     setKycMsg(null);
     setProfileError(null);
+
+    if (!kycFile) {
+      setProfileError("Selecione um arquivo JPG, PNG, WebP ou PDF para enviar.");
+      return;
+    }
+    if (kycFile.size > 5 * 1024 * 1024) {
+      setProfileError("O arquivo deve ter no máximo 5 MB.");
+      return;
+    }
+
+    setSubmittingKyc(true);
     try {
+      const form = new FormData();
+      form.append("type", kycType);
+      form.append("file", kycFile);
+      if (kycDocNumber.trim()) {
+        form.append("documentNumber", kycDocNumber.trim());
+      }
+
       const res = await fetch("/api/auth/kyc", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: kycType,
-          fileUrl: kycFileRef.trim(),
-          documentNumber: kycDocNumber.trim() || undefined,
-        }),
+        body: form,
       });
       const json = (await res.json()) as { document?: KycDoc; message?: string };
       if (!res.ok || !json.document) {
@@ -222,8 +240,9 @@ export function SettingsView() {
       setKycDocs((prev) => [json.document!, ...prev]);
       setKycStatus("PENDING");
       setKycDocNumber("");
-      setKycFileRef("");
-      setKycMsg("Documento enviado para análise na fila de compliance (/admin/users).");
+      setKycFile(null);
+      if (kycInputRef.current) kycInputRef.current.value = "";
+      setKycMsg("Documento enviado com segurança para análise de compliance.");
       router.refresh();
     } finally {
       setSubmittingKyc(false);
@@ -364,13 +383,47 @@ export function SettingsView() {
                   />
                 </div>
                 <div>
-                  <span className="text-muted-foreground mb-1.5 block text-xs">URL / Referência do arquivo</span>
-                  <Input
-                    value={kycFileRef}
-                    onChange={(e) => setKycFileRef(e.target.value)}
-                    placeholder="https://docs.../cnh-frente.pdf"
-                    required
+                  <span className="text-muted-foreground mb-1.5 block text-xs">
+                    Arquivo do documento (JPG, PNG, WebP ou PDF · máx. 5 MB)
+                  </span>
+                  <input
+                    ref={kycInputRef}
+                    id="kyc-file-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0] ?? null;
+                      setKycFile(selected);
+                      setProfileError(null);
+                    }}
+                    className="sr-only"
                   />
+                  {kycFile ? (
+                    <div className="bg-surface-subtle border-line flex h-10 items-center justify-between gap-2 rounded-xl border px-3 text-xs">
+                      <span className="text-foreground truncate">
+                        {kycFile.name} ({Math.max(1, Math.round(kycFile.size / 1024))} KB)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKycFile(null);
+                          if (kycInputRef.current) kycInputRef.current.value = "";
+                        }}
+                        aria-label="Remover arquivo selecionado"
+                        className="text-muted-foreground hover:text-foreground shrink-0"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      htmlFor="kyc-file-input"
+                      className="bg-surface-subtle border-line text-muted-foreground hover:text-foreground hover:border-foreground/30 flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-dashed px-3 text-xs transition-colors"
+                    >
+                      <UploadCloud className="size-4 shrink-0" />
+                      <span className="truncate">Selecionar arquivo...</span>
+                    </label>
+                  )}
                 </div>
               </div>
 
@@ -384,12 +437,56 @@ export function SettingsView() {
                 <p className="text-muted-foreground text-xs">
                   {kycDocs.length} documento(s) enviado(s)
                 </p>
-                <Button type="submit" size="sm" variant="outline" disabled={submittingKyc}>
+                <Button type="submit" size="sm" variant="outline" disabled={submittingKyc || !kycFile}>
                   <FileCheck2 className="size-3.5" />
                   {submittingKyc ? "Enviando..." : "Enviar documento KYC"}
                 </Button>
               </div>
             </form>
+
+            {kycDocs.length > 0 ? (
+              <div className="border-line mt-4 space-y-2 border-t pt-4">
+                {kycDocs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="border-line bg-surface-subtle flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-foreground font-medium">
+                        {doc.type} {doc.fileName ? `· ${doc.fileName}` : ""}
+                      </p>
+                      {doc.reviewNote ? (
+                        <p className="text-muted-foreground text-[11px]">{doc.reviewNote}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold",
+                          doc.status === "APPROVED"
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : doc.status === "REJECTED"
+                              ? "bg-red-500/15 text-red-300"
+                              : "bg-amber-500/15 text-amber-300",
+                        )}
+                      >
+                        {doc.status}
+                      </span>
+                      {doc.fileUrl.startsWith("/") || doc.fileUrl.startsWith("http") ? (
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-accent inline-flex items-center gap-1 hover:underline"
+                        >
+                          Ver <ExternalLink className="size-3" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </SettingsCard>
 
           <SettingsCard title="Notificações" description="Escolha os alertas persistidos na sua conta.">
