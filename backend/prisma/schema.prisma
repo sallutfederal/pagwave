@@ -215,7 +215,6 @@ model User {
   gatewayCredential GatewayCredential?
   gatewayActivities GatewayActivity[]
   gatewayApiLogs GatewayApiLog[]
-  supportThreads SupportThread[]
 
   @@index([email])
   @@index([status])
@@ -847,37 +846,4 @@ model PlatformSetting {
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@map("platform_settings")
-}
-
-model SupportThread {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
-  subject   String   @db.VarChar(160)
-  category  String   @default("Suporte") @db.VarChar(40)
-  status    String   @default("OPEN") @db.VarChar(24)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages SupportMessage[]
-
-  @@index([userId, updatedAt])
-  @@index([status, updatedAt])
-  @@map("support_threads")
-}
-
-model SupportMessage {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  threadId    String   @map("thread_id") @db.Uuid
-  senderId    String   @map("sender_id") @db.Uuid
-  senderRole  String   @default("USER") @map("sender_role") @db.VarChar(16)
-  body        String   @db.VarChar(2000)
-  readByUser  Boolean  @default(false) @map("read_by_user")
-  readByAdmin Boolean  @default(false) @map("read_by_admin")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  thread SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-
-  @@index([threadId, createdAt])
-  @@map("support_messages")
 }

@@ -5,7 +5,6 @@ import type { z } from "zod";
 import { BackendError, backendFetch } from "@/lib/backend";
 import {
   cardSettingsSchema,
-  conversationsSchema,
   currencySchema,
   dashboardSummarySchema,
   periodSchema,
@@ -17,7 +16,6 @@ import {
   walletsSchema,
   type BankCard,
   type CardSetting,
-  type Conversation,
   type Period,
   type Sale,
   type Transaction,
@@ -316,13 +314,6 @@ export async function getRecentSales() {
     .filter((row) => currencySchema.safeParse(row.currency).success);
 
   return recentSalesSchema.parse({ sales: rows });
-}
-
-export async function getConversations(scope?: "user" | "admin") {
-  const query = scope === "admin" ? "?scope=admin" : "";
-  const data = await authed<{ conversations: Conversation[] }>(`/support/threads${query}`);
-
-  return conversationsSchema.parse({ conversations: data.conversations });
 }
 
 /* -------------------------------------------------------------------------- */

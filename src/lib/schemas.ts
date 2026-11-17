@@ -151,30 +151,6 @@ export const transactionSchema = z.object({
 });
 
 /* -------------------------------------------------------------------------- */
-/*                                 Messages                                   */
-/* -------------------------------------------------------------------------- */
-
-export const conversationSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  role: z.string(),
-  subject: z.string().optional(),
-  status: z.string().optional(),
-  userEmail: z.string().optional(),
-  avatar: avatarSchema,
-  online: z.boolean(),
-  unread: z.number().min(0),
-  messages: z.array(
-    z.object({
-      id: z.string(),
-      from: z.enum(["me", "them"]),
-      text: z.string(),
-      time: z.string(),
-    }),
-  ),
-});
-
-/* -------------------------------------------------------------------------- */
 /*                               New card form                                */
 /* -------------------------------------------------------------------------- */
 
@@ -208,7 +184,6 @@ export const cardSettingsSchema = z.object({ settings: z.array(cardSettingSchema
 export const walletsSchema = z.object({ wallets: z.array(walletSchema) });
 export const recentSalesSchema = z.object({ sales: z.array(saleSchema) });
 export const transactionsSchema = z.object({ transactions: z.array(transactionSchema) });
-export const conversationsSchema = z.object({ conversations: z.array(conversationSchema) });
 
 /* --------------------------------- types ---------------------------------- */
 
@@ -225,5 +200,4 @@ export type Sale = z.infer<typeof saleSchema>;
 export type SaleStatus = z.infer<typeof saleStatusSchema>;
 export type Transaction = z.infer<typeof transactionSchema>;
 export type TransactionStatus = z.infer<typeof transactionStatusSchema>;
-export type Conversation = z.infer<typeof conversationSchema>;
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;

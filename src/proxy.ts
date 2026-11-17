@@ -137,7 +137,6 @@ export const config = {
     "/dashboard/:path*",
     "/cards/:path*",
     "/transactions/:path*",
-    "/messages/:path*",
     "/settings/:path*",
     "/admin/:path*",
     "/api/admin/:path*",
