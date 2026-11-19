@@ -398,8 +398,8 @@ export async function dispatchUserNotification(input: {
         body: input.body,
         url: targetUrl,
         tag: `pagwave-${input.type.toLowerCase()}-${notif.id.slice(0, 8)}`,
-        icon: "/icons/icon-192.png",
-        badge: "/icons/icon-192.png",
+        icon: "/icons/icon-192.png?v=2",
+        badge: "/icons/icon-192.png?v=2",
       });
 
       await Promise.all(
