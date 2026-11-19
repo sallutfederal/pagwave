@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { LogoMark } from "@/components/brand/logo";
-import { LogoutRailButton } from "@/components/auth/logout";
 import { adminNav, mainNav, secondaryNav, type NavItem } from "@/components/layout/nav-items";
 import { SidebarNavIcon } from "@/components/layout/sidebar-icons";
 import { useI18n } from "@/components/locale-provider";
@@ -135,10 +134,6 @@ export function Sidebar() {
             </div>
           ) : null}
         </nav>
-
-        <div className="mt-3 border-t border-white/[0.06] pt-3">
-          <LogoutRailButton />
-        </div>
       </aside>
 
       {/* Minimalist mobile bottom bar */}
