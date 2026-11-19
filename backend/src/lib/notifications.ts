@@ -1,10 +1,146 @@
-import { createHash } from "node:crypto";
+import {
+  createCipheriv,
+  createECDH,
+  createHash,
+  createPrivateKey,
+  createSign,
+  generateKeyPairSync,
+  hkdfSync,
+  randomBytes,
+} from "node:crypto";
 import type { NotificationType, Prisma } from "@prisma/client";
-import webpush from "web-push";
 
 import { prisma } from "../config/database.js";
 import { env } from "../config/env.js";
 import { sendNotificationEmail } from "./mailer.js";
+
+function generateVapidKeyPair(): { publicKey: string; privateKey: string } {
+  const { publicKey, privateKey } = generateKeyPairSync("ec", { namedCurve: "P-256" });
+  const pubJwk = publicKey.export({ format: "jwk" }) as { x?: string; y?: string };
+  const privJwk = privateKey.export({ format: "jwk" }) as { d?: string };
+  if (!pubJwk.x || !pubJwk.y || !privJwk.d) {
+    throw new Error("Failed to export VAPID P-256 keypair.");
+  }
+  const pubRaw = Buffer.concat([
+    Buffer.from([0x04]),
+    Buffer.from(pubJwk.x, "base64url"),
+    Buffer.from(pubJwk.y, "base64url"),
+  ]);
+  return {
+    publicKey: pubRaw.toString("base64url"),
+    privateKey: privJwk.d,
+  };
+}
+
+function decodeBase64UrlFlexible(value: string): Buffer {
+  const normalized = value.trim().replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return Buffer.from(normalized, "base64url");
+}
+
+function buildVapidAuthHeader(
+  endpoint: string,
+  subject: string,
+  publicKeyB64: string,
+  privateKeyB64: string,
+): string {
+  const audience = new URL(endpoint).origin;
+  const pubBuf = decodeBase64UrlFlexible(publicKeyB64);
+  if (pubBuf.length !== 65 || pubBuf[0] !== 0x04) {
+    throw new Error("Invalid VAPID public key format.");
+  }
+  const keyObj = createPrivateKey({
+    key: {
+      kty: "EC",
+      crv: "P-256",
+      x: pubBuf.subarray(1, 33).toString("base64url"),
+      y: pubBuf.subarray(33, 65).toString("base64url"),
+      d: decodeBase64UrlFlexible(privateKeyB64).toString("base64url"),
+    },
+    format: "jwk",
+  });
+
+  const header = Buffer.from(JSON.stringify({ typ: "JWT", alg: "ES256" })).toString("base64url");
+  const payload = Buffer.from(
+    JSON.stringify({
+      aud: audience,
+      exp: Math.floor(Date.now() / 1000) + 12 * 3600,
+      sub: subject,
+    }),
+  ).toString("base64url");
+
+  const signingInput = `${header}.${payload}`;
+  const sig = createSign("SHA256")
+    .update(signingInput)
+    .sign({ key: keyObj, dsaEncoding: "ieee-p1363" })
+    .toString("base64url");
+
+  return `vapid t=${signingInput}.${sig}, k=${pubBuf.toString("base64url")}`;
+}
+
+/** Encrypts a UTF-8 Web Push payload per RFC 8291 / RFC 8188 (aes128gcm). */
+function encryptWebPushPayload(
+  payloadJson: string,
+  p256dh: string,
+  auth: string,
+): Buffer {
+  const uaPublic = decodeBase64UrlFlexible(p256dh);
+  const authSecret = decodeBase64UrlFlexible(auth);
+  const ecdh = createECDH("prime256v1");
+  ecdh.generateKeys();
+  const asPublic = ecdh.getPublicKey();
+  const sharedSecret = ecdh.computeSecret(uaPublic);
+  const salt = randomBytes(16);
+
+  const keyInfo = Buffer.concat([Buffer.from("WebPush: info\0"), uaPublic, asPublic]);
+  const ikm = Buffer.from(hkdfSync("sha256", sharedSecret, authSecret, keyInfo, 32));
+  const cek = Buffer.from(
+    hkdfSync("sha256", ikm, salt, Buffer.from("Content-Encoding: aes128gcm\0"), 16),
+  );
+  const nonce = Buffer.from(
+    hkdfSync("sha256", ikm, salt, Buffer.from("Content-Encoding: nonce\0"), 12),
+  );
+
+  const plaintext = Buffer.concat([Buffer.from(payloadJson, "utf8"), Buffer.from([0x02])]);
+  const cipher = createCipheriv("aes-128-gcm", cek, nonce);
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final(), cipher.getAuthTag()]);
+
+  const header = Buffer.alloc(21);
+  salt.copy(header, 0);
+  header.writeUInt32BE(4096, 16);
+  header.writeUInt8(asPublic.length, 20);
+
+  return Buffer.concat([header, asPublic, ciphertext]);
+}
+
+async function sendWebPushMessage(
+  subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
+  payloadJson: string,
+  vapid: { publicKey: string; privateKey: string },
+  subject: string,
+): Promise<{ ok: boolean; statusCode: number }> {
+  const body = encryptWebPushPayload(payloadJson, subscription.keys.p256dh, subscription.keys.auth);
+  const authorization = buildVapidAuthHeader(
+    subscription.endpoint,
+    subject,
+    vapid.publicKey,
+    vapid.privateKey,
+  );
+
+  const response = await fetch(subscription.endpoint, {
+    method: "POST",
+    headers: {
+      TTL: "86400",
+      Urgency: "high",
+      "Content-Type": "application/octet-stream",
+      "Content-Encoding": "aes128gcm",
+      Authorization: authorization,
+    },
+    body: new Uint8Array(body),
+    signal: AbortSignal.timeout(5000),
+  });
+
+  return { ok: response.ok, statusCode: response.status };
+}
 
 export type NotificationPreferenceCategory =
   | "paymentAlerts"
@@ -70,7 +206,7 @@ export async function getOrCreateVapidKeys(actorUserId?: string): Promise<{
     }
   }
 
-  const generated = webpush.generateVAPIDKeys();
+  const generated = generateVapidKeyPair();
   const owner =
     actorUserId ??
     (await prisma.user.findFirst({ select: { id: true }, orderBy: { createdAt: "asc" } }))?.id;
@@ -251,8 +387,10 @@ export async function dispatchUserNotification(input: {
 
     if (devices.length > 0) {
       const vapid = await getOrCreateVapidKeys(input.userId);
-      const subject = process.env.VAPID_SUBJECT?.trim() || `mailto:${env.SMTP_FROM || "noreply@pagwave.com"}`;
-      webpush.setVapidDetails(subject, vapid.publicKey, vapid.privateKey);
+      const rawFrom = env.SMTP_FROM?.match(/<([^>]+)>/)?.[1] ?? env.SMTP_FROM ?? "noreply@pagwave.com";
+      const subject =
+        process.env.VAPID_SUBJECT?.trim() ||
+        (rawFrom.includes("@") ? `mailto:${rawFrom.trim()}` : "mailto:noreply@pagwave.com");
 
       const pushPayload = JSON.stringify({
         id: notif.id,
@@ -267,26 +405,26 @@ export async function dispatchUserNotification(input: {
       await Promise.all(
         devices.map(async (device) => {
           try {
-            await webpush.sendNotification(
-              {
-                endpoint: device.endpoint,
-                keys: device.keys,
-              },
+            const res = await sendWebPushMessage(
+              { endpoint: device.endpoint, keys: device.keys },
               pushPayload,
-              { TTL: 86_400, urgency: "high" },
+              vapid,
+              subject,
             );
-            pushDelivered += 1;
-          } catch (err: unknown) {
-            pushFailed += 1;
-            const statusCode =
-              typeof err === "object" && err !== null && "statusCode" in err
-                ? Number((err as { statusCode?: unknown }).statusCode)
-                : 0;
-            if (statusCode === 404 || statusCode === 410) {
-              await deactivatePushDevice(input.userId, device.endpoint, `http_${statusCode}`).catch(
-                () => undefined,
-              );
+            if (res.ok) {
+              pushDelivered += 1;
+            } else {
+              pushFailed += 1;
+              if (res.statusCode === 404 || res.statusCode === 410) {
+                await deactivatePushDevice(
+                  input.userId,
+                  device.endpoint,
+                  `http_${res.statusCode}`,
+                ).catch(() => undefined);
+              }
             }
+          } catch {
+            pushFailed += 1;
           }
         }),
       );
