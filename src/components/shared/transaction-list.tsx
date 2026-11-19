@@ -5,6 +5,12 @@ import { statusTone } from "@/lib/status";
 import type { Transaction } from "@/lib/schemas";
 import { Badge } from "@/components/ui/badge";
 
+const STATUS_LABEL: Record<Transaction["status"], string> = {
+  Completed: "Concluída",
+  Pending: "Pendente",
+  Failed: "Falhou",
+};
+
 export function TransactionListItem({
   transaction,
   showDate = false,
@@ -41,7 +47,7 @@ export function TransactionListItem({
           )}
         </span>
         <Badge tone={statusTone(transaction.status)} className="px-2 py-0.5 text-[10px]">
-          {transaction.status}
+          {STATUS_LABEL[transaction.status]}
         </Badge>
       </div>
     </Card>
@@ -52,7 +58,7 @@ export function TransactionsList({ transactions }: { transactions: Transaction[]
   if (transactions.length === 0) {
     return (
       <Card className="text-muted-foreground p-6 text-center text-xs">
-        No transactions yet. Deposits, transfers and card activity will show up here.
+        Nenhuma movimentação registrada ainda. Depósitos, saques e transferências P2P aparecerão aqui.
       </Card>
     );
   }

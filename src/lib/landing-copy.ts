@@ -176,7 +176,7 @@ export const landingCopy = {
     title: "Dê um cartão para cada pessoa da sua equipe.",
     lead:
       "Cartões Visa físicos de metal e virtuais instantâneos com limites por pessoa, moeda ou categoria — e aprovação biométrica direta no checkout.",
-    cta: { href: "/cards", label: "Conheça os cartões" },
+    cta: { href: "/create", label: "Abrir conta corporativa" },
   },
 
   scale: {
@@ -256,9 +256,9 @@ export const landingCopy = {
         title: "Produtos",
         links: [
           { href: "/dashboard", label: "Conta Empresarial" },
-          { href: "/cards", label: "Cartão Corporativo" },
-          { href: "/transactions", label: "Pagamentos Globais" },
           { href: "/wallet", label: "Carteira Multi-moeda" },
+          { href: "/transactions", label: "Pagamentos Globais" },
+          { href: "/docs", label: "API & Webhooks" },
         ],
       },
       {

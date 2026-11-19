@@ -1,7 +1,6 @@
 import {
   Activity,
   ArrowLeftRight,
-  CreditCard,
   KeyRound,
   LayoutGrid,
   LogOut,
@@ -20,10 +19,9 @@ export type NavItem = {
 };
 
 export const mainNav: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
-  { href: "/wallet", label: "Wallet", icon: Wallet },
-  { href: "/cards", label: "Cards", icon: CreditCard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/dashboard", label: "Painel", icon: LayoutGrid },
+  { href: "/wallet", label: "Carteira", icon: Wallet },
+  { href: "/transactions", label: "Transações", icon: ArrowLeftRight },
 ];
 
 export const secondaryNav: NavItem[] = [
@@ -38,4 +36,4 @@ export const adminNav: NavItem[] = [
   { href: "/admin/settings", label: "Admin · Configurações & Moedas", icon: Sliders },
 ];
 
-export const logoutItem: NavItem = { href: "#", label: "Log out", icon: LogOut };
+export const logoutItem: NavItem = { href: "#", label: "Sair", icon: LogOut };

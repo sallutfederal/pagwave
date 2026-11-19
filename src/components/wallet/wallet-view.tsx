@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowDownLeft,
@@ -7,6 +8,7 @@ import {
   ArrowUpRight,
   History,
   KeyRound,
+  Send,
 } from "lucide-react";
 import { BeneficiariesPanel } from "@/components/wallet/beneficiaries-panel";
 import { CashinPanel } from "@/components/wallet/cashin-panel";
@@ -15,6 +17,7 @@ import {
   ConversionPanel,
   HistoryAndLookupPanel,
 } from "@/components/wallet/conversion-and-history";
+import { P2PTransferPanel } from "@/components/wallet/p2p-transfer-panel";
 import type {
   BalancePayload,
   CashinIntent,
@@ -34,13 +37,27 @@ const TABS: Array<{
 }> = [
   { id: "cashout", label: "Sacar (Cash-out)", icon: ArrowUpRight },
   { id: "cashin", label: "Depositar & Receber", icon: ArrowDownLeft },
+  { id: "transfer", label: "Transferir (P2P)", icon: Send },
   { id: "beneficiaries", label: "Chaves & Carteiras", icon: KeyRound },
   { id: "convert", label: "Conversão FX", icon: ArrowLeftRight },
   { id: "history", label: "Extrato & Consultas", icon: History },
 ];
 
+const VALID_TABS = new Set<WalletTab>([
+  "cashout",
+  "cashin",
+  "transfer",
+  "beneficiaries",
+  "convert",
+  "history",
+]);
+
 export function WalletView() {
-  const [activeTab, setActiveTab] = useState<WalletTab>("cashout");
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab") as WalletTab | null;
+  const [activeTab, setActiveTab] = useState<WalletTab>(() =>
+    requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : "cashout",
+  );
   const [cashinIntent, setCashinIntent] = useState<CashinIntent>("self_deposit");
   const [selectedCurrency, setSelectedCurrency] = useState<XPagCurrency>("BRL");
   const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(
@@ -185,6 +202,15 @@ export function WalletView() {
           isSandbox={balanceData?.isSandbox ?? true}
           intent={cashinIntent}
           onChangeIntent={setCashinIntent}
+          onSelectCurrency={setSelectedCurrency}
+          onSuccessRefresh={refreshAll}
+        />
+      ) : null}
+
+      {activeTab === "transfer" ? (
+        <P2PTransferPanel
+          balanceData={balanceData}
+          selectedCurrency={selectedCurrency}
           onSelectCurrency={setSelectedCurrency}
           onSuccessRefresh={refreshAll}
         />

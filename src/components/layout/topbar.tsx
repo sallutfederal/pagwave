@@ -43,17 +43,17 @@ export function Topbar() {
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/settings">
-                  <User /> Profile
+                  <User /> Perfil
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/wallet">
-                  <Wallet /> Billing
+                  <Wallet /> Carteira &amp; Saldos
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/settings">
-                  <Settings /> Settings
+                  <Settings /> Configurações
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -62,7 +62,7 @@ export function Topbar() {
                 onSelect={() => void logout()}
                 className="text-rose-400 hover:text-rose-300 focus:text-rose-300"
               >
-                <LogOut /> Sign out
+                <LogOut /> Sair
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

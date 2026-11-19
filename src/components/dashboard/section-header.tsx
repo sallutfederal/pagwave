@@ -11,7 +11,7 @@ type SectionHeaderProps = {
 
 export function SectionHeader({
   title,
-  actionLabel = "See all",
+  actionLabel = "Ver tudo",
   actionHref,
   className,
 }: SectionHeaderProps) {

@@ -8,15 +8,20 @@ export const createWalletSchema = z.object({
 
 export type CreateWalletInput = z.infer<typeof createWalletSchema>;
 
-export const transferSchema = z.object({
-  fromWalletId: z.string().uuid(),
-  toWalletId: z.string().uuid().optional(), // Internal transfer target
-  recipientEmail: z.string().email().optional(), // P2P by email
-  recipientAddress: z.string().optional(), // Crypto external address
-  amount: z.string().refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be positive"),
-  description: z.string().max(500).optional(),
-  network: z.enum(["ETHEREUM", "TRON", "BSC", "POLYGON", "SOLANA", "BITCOIN", "ARBITRUM", "OPTIMISM"]).optional(),
-});
+export const transferSchema = z
+  .object({
+    fromWalletId: z.string().uuid().optional(),
+    currencyCode: z.string().trim().min(2).max(10).optional(),
+    toWalletId: z.string().uuid().optional(), // Internal transfer target
+    recipientEmail: z.string().trim().toLowerCase().email().optional(), // P2P by email
+    recipientAddress: z.string().optional(), // Crypto external address
+    amount: z.string().refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be positive"),
+    description: z.string().trim().max(500).optional(),
+    network: z.enum(["ETHEREUM", "TRON", "BSC", "POLYGON", "SOLANA", "BITCOIN", "ARBITRUM", "OPTIMISM"]).optional(),
+  })
+  .refine((v) => Boolean(v.fromWalletId || v.currencyCode), {
+    message: "Informe a carteira ou moeda de origem.",
+  });
 
 export type TransferInput = z.infer<typeof transferSchema>;
 

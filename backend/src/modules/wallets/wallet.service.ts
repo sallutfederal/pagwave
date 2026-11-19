@@ -117,55 +117,130 @@ export async function createWallet(userId: string, input: CreateWalletInput) {
 // ─── Internal Transfer (pagwave-to-pagwave) ─────────────────────────────────
 
 export async function internalTransfer(userId: string, input: TransferInput) {
-  const fromWallet = await prisma.wallet.findFirst({
-    where: { id: input.fromWalletId, userId, isActive: true },
-    include: { currency: true },
-  });
+  const fromWallet = input.fromWalletId
+    ? await prisma.wallet.findFirst({
+        where: { id: input.fromWalletId, userId, isActive: true },
+        include: { currency: true },
+      })
+    : await prisma.wallet.findFirst({
+        where: { userId, currency: { code: input.currencyCode!.toUpperCase() }, isActive: true },
+        include: { currency: true },
+      });
 
-  if (!fromWallet) throw new NotFoundError("Source wallet");
+  if (!fromWallet) {
+    throw new InsufficientFundsError(
+      input.currencyCode
+        ? `Você ainda não possui saldo disponível em ${input.currencyCode.toUpperCase()}.`
+        : "Carteira de origem não encontrada.",
+    );
+  }
 
   const amount = toDecimal(input.amount);
-
-  // Check balance
-  if (!decimalGte(fromWallet.availableBalance, amount)) {
-    throw new InsufficientFundsError();
+  if (fromWallet.currency.code === "CLP" && !amount.isInteger()) {
+    throw new BadRequestError("CLP exige valor inteiro sem casas decimais.");
   }
 
-  // Find target wallet
-  let toWallet;
+  if (!decimalGte(fromWallet.availableBalance, amount)) {
+    throw new InsufficientFundsError(
+      `Saldo disponível insuficiente em ${fromWallet.currency.code}.`,
+    );
+  }
+
+  const senderUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      profile: { select: { displayName: true, firstName: true, lastName: true } },
+    },
+  });
+
+  let recipientInfo: {
+    id: string;
+    email: string;
+    name: string;
+  } | null = null;
+  let explicitToWalletId: string | null = null;
 
   if (input.toWalletId) {
-    // Direct wallet-to-wallet
-    toWallet = await prisma.wallet.findFirst({
-      where: { id: input.toWalletId, isActive: true },
-      include: { currency: true },
-    });
-  } else if (input.recipientEmail) {
-    // P2P by email
-    const recipientUser = await prisma.user.findUnique({
-      where: { email: input.recipientEmail },
-    });
-
-    if (!recipientUser) throw new NotFoundError("Recipient");
-
-    toWallet = await prisma.wallet.findFirst({
+    const targetWallet = await prisma.wallet.findFirst({
       where: {
-        userId: recipientUser.id,
+        id: input.toWalletId,
         currencyId: fromWallet.currencyId,
-        type: fromWallet.type,
         isActive: true,
       },
-      include: { currency: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            profile: { select: { displayName: true, firstName: true, lastName: true } },
+          },
+        },
+      },
+    });
+    if (!targetWallet) {
+      throw new NotFoundError("Carteira de destino compatível não encontrada.");
+    }
+    if (targetWallet.userId === userId) {
+      throw new BadRequestError("Você não pode transferir para a sua própria conta.");
+    }
+    if (
+      targetWallet.user.status === "SUSPENDED" ||
+      targetWallet.user.status === "BLOCKED" ||
+      targetWallet.user.status === "CLOSED"
+    ) {
+      throw new BadRequestError("A conta destinatária não está ativa para receber transferências.");
+    }
+    explicitToWalletId = targetWallet.id;
+    recipientInfo = {
+      id: targetWallet.user.id,
+      email: targetWallet.user.email,
+      name:
+        targetWallet.user.profile?.displayName ||
+        `${targetWallet.user.profile?.firstName ?? ""} ${targetWallet.user.profile?.lastName ?? ""}`.trim() ||
+        targetWallet.user.email,
+    };
+  } else if (input.recipientEmail) {
+    const normalizedEmail = input.recipientEmail.trim().toLowerCase();
+    const recipientUser = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        status: true,
+        profile: { select: { displayName: true, firstName: true, lastName: true } },
+      },
     });
 
-    if (!toWallet) {
-      throw new BadRequestError("Recipient does not have a matching wallet.");
+    if (!recipientUser) {
+      throw new NotFoundError("Nenhuma conta PagWave encontrada com esse e-mail.");
     }
+    if (recipientUser.id === userId) {
+      throw new BadRequestError("Você não pode transferir para a sua própria conta.");
+    }
+    if (
+      recipientUser.status === "SUSPENDED" ||
+      recipientUser.status === "BLOCKED" ||
+      recipientUser.status === "CLOSED"
+    ) {
+      throw new BadRequestError("A conta destinatária não está ativa para receber transferências.");
+    }
+
+    recipientInfo = {
+      id: recipientUser.id,
+      email: recipientUser.email,
+      name:
+        recipientUser.profile?.displayName ||
+        `${recipientUser.profile?.firstName ?? ""} ${recipientUser.profile?.lastName ?? ""}`.trim() ||
+        recipientUser.email,
+    };
+  } else {
+    throw new BadRequestError("Informe o e-mail do usuário PagWave ou a carteira de destino.");
   }
 
-  if (!toWallet) throw new BadRequestError("No valid transfer destination.");
-
-  // Get fee config
+  // Get fee config (0 by default if no TRANSFER_OUT rule is configured)
   const feeConfig = await prisma.feeConfig.findUnique({
     where: {
       transactionType_currencyCode: {
@@ -175,68 +250,152 @@ export async function internalTransfer(userId: string, input: TransferInput) {
     },
   });
 
-  const fee = feeConfig
-    ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
-    : decimalZero();
+  const fee =
+    feeConfig && feeConfig.isActive
+      ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
+      : decimalZero();
 
   const netAmount = decimalSub(amount, fee);
   const refId = generateTxRef();
+  const senderLabel =
+    senderUser?.profile?.displayName ||
+    `${senderUser?.profile?.firstName ?? ""} ${senderUser?.profile?.lastName ?? ""}`.trim() ||
+    senderUser?.email ||
+    "Usuário PagWave";
+  const now = new Date();
 
-  // Execute in a transaction (ACID)
-  const [txOut, txIn] = await prisma.$transaction([
-    // Debit sender
-    prisma.wallet.update({
-      where: { id: fromWallet.id },
+  const result = await prisma.$transaction(async (tx) => {
+    const debited = await tx.wallet.updateMany({
+      where: {
+        id: fromWallet.id,
+        isActive: true,
+        availableBalance: { gte: amount },
+      },
       data: {
         balance: { decrement: amount },
         availableBalance: { decrement: amount },
       },
-    }),
-    // Credit receiver
-    prisma.wallet.update({
-      where: { id: toWallet.id },
+    });
+
+    if (debited.count === 0) {
+      throw new InsufficientFundsError(
+        `Saldo disponível insuficiente em ${fromWallet.currency.code}.`,
+      );
+    }
+
+    let destinationWallet = explicitToWalletId
+      ? await tx.wallet.findUnique({ where: { id: explicitToWalletId } })
+      : await tx.wallet.findFirst({
+          where: {
+            userId: recipientInfo.id,
+            currencyId: fromWallet.currencyId,
+            type: fromWallet.type,
+            isActive: true,
+          },
+        });
+
+    if (!destinationWallet) {
+      destinationWallet = await tx.wallet.create({
+        data: {
+          userId: recipientInfo.id,
+          currencyId: fromWallet.currencyId,
+          type: fromWallet.type,
+          label: `${fromWallet.currency.code} Wallet`,
+          balance: decimalZero(),
+          availableBalance: decimalZero(),
+          frozenBalance: decimalZero(),
+          isDefault: false,
+        },
+      });
+    }
+
+    await tx.wallet.update({
+      where: { id: destinationWallet.id },
       data: {
         balance: { increment: netAmount },
         availableBalance: { increment: netAmount },
       },
-    }),
-    // Transaction record — OUT
-    prisma.transaction.create({
+    });
+
+    await tx.transaction.create({
       data: {
         referenceId: refId,
         userId,
         type: "TRANSFER_OUT",
         status: "COMPLETED",
         fromWalletId: fromWallet.id,
-        toWalletId: toWallet.id,
+        toWalletId: destinationWallet.id,
         amount,
         fee,
         netAmount,
         currencyCode: fromWallet.currency.code,
-        description: input.description ?? "Internal transfer",
-        completedAt: new Date(),
+        description: input.description
+          ? `${input.description} (${recipientInfo.email})`
+          : `Transferência para ${recipientInfo.email}`,
+        completedAt: now,
       },
-    }),
-    // Transaction record — IN (for recipient's history)
-    prisma.transaction.create({
+    });
+
+    await tx.transaction.create({
       data: {
         referenceId: `${refId}-IN`,
-        userId: toWallet.userId,
+        userId: recipientInfo.id,
         type: "TRANSFER_IN",
         status: "COMPLETED",
         fromWalletId: fromWallet.id,
-        toWalletId: toWallet.id,
+        toWalletId: destinationWallet.id,
         amount: netAmount,
         fee: decimalZero(),
         netAmount,
         currencyCode: fromWallet.currency.code,
-        description: input.description ?? "Received transfer",
-        completedAt: new Date(),
+        description: input.description
+          ? `${input.description} (de ${senderUser?.email ?? senderLabel})`
+          : `Recebido de ${senderUser?.email ?? senderLabel}`,
+        completedAt: now,
       },
-    }),
-  ]);
+    });
 
-  // Audit
+    await tx.gatewayActivity.create({
+      data: {
+        userId,
+        kind: "transfer_out",
+        currency: fromWallet.currency.code,
+        amount: new Decimal(amount.toString()),
+        rail: "PagWave P2P",
+        status: "completed",
+        externalId: refId,
+        destinationSummary: `Para ${recipientInfo.email}`,
+        settledInLedger: true,
+        metadata: {
+          recipientId: recipientInfo.id,
+          recipientEmail: recipientInfo.email,
+          description: input.description ?? null,
+        },
+      },
+    });
+
+    await tx.gatewayActivity.create({
+      data: {
+        userId: recipientInfo.id,
+        kind: "transfer_in",
+        currency: fromWallet.currency.code,
+        amount: new Decimal(netAmount.toString()),
+        rail: "PagWave P2P",
+        status: "completed",
+        externalId: `${refId}-IN`,
+        destinationSummary: `De ${senderUser?.email ?? senderLabel}`,
+        settledInLedger: true,
+        metadata: {
+          senderId: userId,
+          senderEmail: senderUser?.email ?? null,
+          description: input.description ?? null,
+        },
+      },
+    });
+
+    return { toWalletId: destinationWallet.id };
+  });
+
   await prisma.auditLog.create({
     data: {
       userId,
@@ -246,8 +405,10 @@ export async function internalTransfer(userId: string, input: TransferInput) {
       details: {
         amount: amount.toString(),
         fee: fee.toString(),
+        netAmount: netAmount.toString(),
         currency: fromWallet.currency.code,
-        toWalletId: toWallet.id,
+        recipientEmail: recipientInfo.email,
+        toWalletId: result.toWalletId,
       },
     },
   });
@@ -258,6 +419,8 @@ export async function internalTransfer(userId: string, input: TransferInput) {
     fee: fee.toString(),
     netAmount: netAmount.toString(),
     currencyCode: fromWallet.currency.code,
+    recipientEmail: recipientInfo.email,
+    recipientName: recipientInfo.name,
     status: "COMPLETED",
   };
 }

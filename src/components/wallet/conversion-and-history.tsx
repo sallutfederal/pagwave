@@ -442,14 +442,18 @@ export function HistoryAndLookupPanel({
                       <span
                         className={cn(
                           "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
-                          item.kind === "cashin"
+                          item.kind === "cashin" || item.kind === "transfer_in"
                             ? "bg-emerald-500/15 text-emerald-300"
-                            : item.kind === "cashout"
+                            : item.kind === "cashout" || item.kind === "transfer_out"
                               ? "bg-amber-500/15 text-amber-300"
                               : "bg-sky-500/15 text-sky-300",
                         )}
                       >
-                        {item.kind}
+                        {item.kind === "transfer_in"
+                          ? "P2P Recebido"
+                          : item.kind === "transfer_out"
+                            ? "P2P Enviado"
+                            : item.kind}
                       </span>
                       <span className="text-foreground text-xs font-semibold">
                         {item.currency}

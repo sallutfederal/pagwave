@@ -7,7 +7,7 @@ export function WalletsStrip({ wallets }: { wallets: Wallet[] }) {
   if (wallets.length === 0) {
     return (
       <Card className="text-muted-foreground p-5 text-sm">
-        No wallets yet. They are created automatically when you open an account.
+        Nenhuma carteira encontrada ainda. Elas são criadas automaticamente ao abrir ou movimentar uma conta.
       </Card>
     );
   }
@@ -37,7 +37,7 @@ export function WalletsStrip({ wallets }: { wallets: Wallet[] }) {
                   currency: wallet.currency,
                   fractionDigits: 2,
                 })}{' '}
-                on hold
+                bloqueado
               </p>
             ) : null}
           </Card>

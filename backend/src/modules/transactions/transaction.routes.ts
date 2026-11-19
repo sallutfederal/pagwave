@@ -258,8 +258,8 @@ export async function transactionRoutes(app: FastifyInstance) {
       currency: "USD",
       total: Number((bills + money).toFixed(2)),
       segments: [
-        { id: "bills", label: "Card payments & fees", value: Number(bills.toFixed(2)) },
-        { id: "money", label: "Money transfers", value: Number(money.toFixed(2)) },
+        { id: "bills", label: "Pagamentos e tarifas", value: Number(bills.toFixed(2)) },
+        { id: "money", label: "Transferências e saques", value: Number(money.toFixed(2)) },
       ],
     };
   });

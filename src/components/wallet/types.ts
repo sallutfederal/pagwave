@@ -32,7 +32,7 @@ export type ClientBeneficiary = {
 
 export type ClientWalletActivity = {
   id: string;
-  kind: "cashin" | "cashout" | "conversion" | "med";
+  kind: "cashin" | "cashout" | "conversion" | "med" | "transfer_out" | "transfer_in";
   currency: string;
   toCurrency?: string;
   amount?: number;
@@ -66,5 +66,5 @@ export type ClientWebhookEvent = {
   payload: Record<string, unknown>;
 };
 
-export type WalletTab = "cashout" | "cashin" | "beneficiaries" | "convert" | "history";
+export type WalletTab = "cashout" | "cashin" | "transfer" | "beneficiaries" | "convert" | "history";
 

@@ -15,7 +15,7 @@ function VerifyEmailStatus() {
 
   const [status, setStatus] = useState<Status>(token ? "verifying" : "error");
   const [message, setMessage] = useState<string>(
-    token ? "Confirming your e-mail address…" : "This verification link is incomplete.",
+    token ? "Confirmando seu endereço de e-mail…" : "Este link de verificação está incompleto.",
   );
 
   useEffect(() => {
@@ -37,15 +37,15 @@ function VerifyEmailStatus() {
 
         if (response.ok) {
           setStatus("verified");
-          setMessage("Your e-mail address has been verified and your account is active.");
+          setMessage("Seu endereço de e-mail foi verificado e sua conta está ativa.");
         } else {
           setStatus("error");
-          setMessage(payload?.message ?? "This verification link is invalid or already used.");
+          setMessage(payload?.message ?? "Este link de verificação é inválido ou já foi utilizado.");
         }
       } catch {
         if (!cancelled) {
           setStatus("error");
-          setMessage("Network error while verifying your e-mail. Please try again.");
+          setMessage("Erro de rede ao verificar seu e-mail. Tente novamente.");
         }
       }
     }
@@ -60,10 +60,10 @@ function VerifyEmailStatus() {
     <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="lh-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-          E-mail verification
+          Verificação de e-mail
         </h1>
         <p className="text-sm text-lh-muted">
-          Keeping your account secure and ready for transactions.
+          Mantendo sua conta protegida e pronta para movimentações.
         </p>
       </div>
 
@@ -79,10 +79,10 @@ function VerifyEmailStatus() {
           <div className="space-y-1">
             <p className="text-sm font-semibold text-white">
               {status === "verifying"
-                ? "Verifying…"
+                ? "Verificando…"
                 : status === "verified"
-                  ? "E-mail confirmed"
-                  : "Verification failed"}
+                  ? "E-mail confirmado"
+                  : "Falha na verificação"}
             </p>
             <p className="text-xs leading-relaxed text-lh-muted">{message}</p>
           </div>
@@ -93,7 +93,7 @@ function VerifyEmailStatus() {
         href="/dashboard"
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-lh-accent px-4 text-sm font-semibold text-white shadow-lg shadow-lh-accent/25 transition hover:bg-lh-accent/90"
       >
-        Continue to Dashboard
+        Ir para o Painel
         <ArrowRight className="size-4" />
       </Link>
     </div>

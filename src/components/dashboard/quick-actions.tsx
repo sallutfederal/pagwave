@@ -1,23 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { Bus, Landmark, Receipt, Send, type LucideIcon } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Receipt, Send, type LucideIcon } from "lucide-react";
 
 import type { QuickAction } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
 const icons: Record<QuickAction["id"], LucideIcon> = {
   transfer: Send,
-  utility: Landmark,
+  utility: ArrowDownLeft,
   taxes: Receipt,
-  transport: Bus,
+  transport: ArrowUpRight,
 };
 
 const actionHref: Record<QuickAction["id"], string> = {
-  transfer: "/wallet",
-  utility: "/wallet",
+  transfer: "/wallet?tab=transfer",
+  utility: "/wallet?tab=cashin",
   taxes: "/transactions",
-  transport: "/cards",
+  transport: "/wallet?tab=cashout",
 };
 
 export function QuickActions({ actions }: { actions: QuickAction[] }) {

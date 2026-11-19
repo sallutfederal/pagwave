@@ -25,12 +25,12 @@ function ResetPasswordForm() {
     setError(null);
 
     if (!token) {
-      setError("This reset link is missing its token. Request a new password reset.");
+      setError("Este link está incompleto (token ausente). Solicite uma nova redefinição.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Passwords do not match.");
+      setError("As senhas não conferem.");
       return;
     }
 
@@ -46,13 +46,13 @@ function ResetPasswordForm() {
       const payload = (await response.json().catch(() => null)) as { message?: string } | null;
 
       if (!response.ok) {
-        setError(payload?.message ?? "This reset link is invalid or has expired.");
+        setError(payload?.message ?? "Este link é inválido ou já expirou.");
         return;
       }
 
       setDone(true);
     } catch {
-      setError("Network error. Please try again.");
+      setError("Erro de rede. Tente novamente.");
     } finally {
       setPending(false);
     }
@@ -62,10 +62,10 @@ function ResetPasswordForm() {
     <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="lh-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-          Choose a new password
+          Escolha uma nova senha
         </h1>
         <p className="text-sm text-lh-muted">
-          Set a strong password to regain access to your Pagwave account.
+          Defina uma senha forte para retomar o acesso à sua conta pagwave.
         </p>
       </div>
 
@@ -76,27 +76,27 @@ function ResetPasswordForm() {
           <div className="flex items-start gap-3">
             <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-400" />
             <div className="space-y-1 text-xs leading-relaxed text-emerald-200">
-              <p className="text-sm font-semibold text-white">Password updated</p>
-              <p>All previous sessions have been signed out for your security.</p>
+              <p className="text-sm font-semibold text-white">Senha atualizada</p>
+              <p>Todas as sessões anteriores foram encerradas por segurança.</p>
             </div>
           </div>
           <Link
             href="/login"
             className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-lh-accent text-xs font-semibold text-white transition hover:bg-lh-accent/90"
           >
-            Sign in with new password
+            Entrar com a nova senha
             <ArrowRight className="size-3.5" />
           </Link>
         </div>
       ) : (
         <form onSubmit={handleSubmit} noValidate className="space-y-4">
-          <AuthField label="New password" htmlFor="reset-password">
+          <AuthField label="Nova senha" htmlFor="reset-password">
             <div className="relative">
               <AuthInput
                 id="reset-password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="new-password"
-                placeholder="Minimum 8 characters"
+                placeholder="Mínimo de 8 caracteres"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 disabled={pending}
@@ -105,7 +105,7 @@ function ResetPasswordForm() {
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 className="absolute top-1/2 right-3 -translate-y-1/2 text-lh-muted transition-colors hover:text-white"
               >
                 {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -114,12 +114,12 @@ function ResetPasswordForm() {
             <AuthPasswordStrength password={newPassword} />
           </AuthField>
 
-          <AuthField label="Confirm password" htmlFor="reset-confirm">
+          <AuthField label="Confirmar nova senha" htmlFor="reset-confirm">
             <AuthInput
               id="reset-confirm"
               type={showPassword ? "text" : "password"}
               autoComplete="new-password"
-              placeholder="Repeat your new password"
+              placeholder="Repita sua nova senha"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={pending}
@@ -134,11 +134,11 @@ function ResetPasswordForm() {
             {pending ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                Updating password…
+                Atualizando senha…
               </>
             ) : (
               <>
-                Update password
+                Atualizar senha
                 <ArrowRight className="size-4" />
               </>
             )}

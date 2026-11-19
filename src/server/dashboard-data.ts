@@ -163,10 +163,10 @@ export async function getDashboardSummary() {
     greeting: {
       name: user.name,
       email: user.email,
-      title: "Dashboard",
-      subtitle: "Overview",
+      title: "Painel",
+      subtitle: "Visão geral",
       avatar: { url: "", initials: user.initials },
-      accountLabel: "My account",
+      accountLabel: "Minha conta",
     },
     cards: bankCards,
     quickActions,
@@ -269,7 +269,7 @@ export async function getStatistic(period: Period) {
     total: stat.total,
     currency: "USD",
     period,
-    label: "Spending",
+    label: "Saídas",
     segments: stat.segments.map((segment) => ({
       ...segment,
       // Share of the 360° ring. With nothing spent every arc collapses to 0.
@@ -279,10 +279,10 @@ export async function getStatistic(period: Period) {
 }
 
 const quickActions = [
-  { id: "transfer", label: "Transfer", active: true },
-  { id: "utility", label: "Utility", active: false },
-  { id: "taxes", label: "Taxes", active: false },
-  { id: "transport", label: "Transport", active: false },
+  { id: "transfer", label: "Transferir P2P", active: true },
+  { id: "utility", label: "Depositar", active: false },
+  { id: "transport", label: "Sacar", active: false },
+  { id: "taxes", label: "Extrato", active: false },
 ] as const;
 
 export async function getRecentSales() {

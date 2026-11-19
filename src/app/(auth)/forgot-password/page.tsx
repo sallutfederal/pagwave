@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     if (!email.trim()) {
-      setError("Enter your account e-mail address.");
+      setError("Informe o e-mail da sua conta.");
       return;
     }
 
@@ -33,13 +33,13 @@ export default function ForgotPasswordPage() {
 
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-        setError(payload?.message ?? "Enter a valid e-mail address.");
+        setError(payload?.message ?? "Informe um endereço de e-mail válido.");
         return;
       }
 
       setSent(true);
     } catch {
-      setError("Network error. Please try again.");
+      setError("Erro de rede. Tente novamente.");
     } finally {
       setPending(false);
     }
@@ -50,10 +50,10 @@ export default function ForgotPasswordPage() {
       <div className="space-y-6">
         <div className="space-y-2">
           <h1 className="lh-display text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Reset password
+            Redefinir senha
           </h1>
           <p className="text-sm text-lh-muted">
-            Enter your e-mail and we&apos;ll send a link to choose a new password.
+            Informe seu e-mail para receber o link de escolha de uma nova senha.
           </p>
         </div>
 
@@ -64,9 +64,9 @@ export default function ForgotPasswordPage() {
             <div className="flex items-start gap-3">
               <MailCheck className="mt-0.5 size-5 shrink-0 text-emerald-400" />
               <div className="space-y-1 text-xs leading-relaxed text-emerald-200">
-                <p className="text-sm font-semibold text-white">Check your inbox</p>
+                <p className="text-sm font-semibold text-white">Verifique sua caixa de entrada</p>
                 <p>
-                  If an account exists for <strong>{email}</strong>, a password reset link is on the way.
+                  Se existir uma conta para <strong>{email}</strong>, um link de redefinição de senha foi enviado.
                 </p>
               </div>
             </div>
@@ -75,17 +75,17 @@ export default function ForgotPasswordPage() {
               className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] text-xs font-semibold text-white transition hover:bg-white/[0.1]"
             >
               <ArrowLeft className="size-3.5" />
-              Back to Sign in
+              Voltar para entrar
             </Link>
           </div>
         ) : (
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            <AuthField label="E-mail address" htmlFor="forgot-email">
+            <AuthField label="Endereço de e-mail" htmlFor="forgot-email">
               <AuthInput
                 id="forgot-email"
                 type="email"
                 autoComplete="email"
-                placeholder="name@company.com"
+                placeholder="nome@empresa.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={pending}
@@ -101,11 +101,11 @@ export default function ForgotPasswordPage() {
               {pending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Sending link…
+                  Enviando link…
                 </>
               ) : (
                 <>
-                  Send reset link
+                  Enviar link de redefinição
                   <ArrowRight className="size-4" />
                 </>
               )}
@@ -114,9 +114,9 @@ export default function ForgotPasswordPage() {
         )}
 
         <p className="text-center text-xs text-lh-muted">
-          Remembered your password?{" "}
+          Lembrou sua senha?{" "}
           <Link href="/login" className="font-semibold text-lh-accent hover:underline">
-            Sign in
+            Entrar
           </Link>
         </p>
       </div>
