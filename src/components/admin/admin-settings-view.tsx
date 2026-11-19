@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, ShieldAlert, Trash2 } from "lucide-react";
+import { Save, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -44,7 +44,6 @@ export function AdminSettingsView() {
   const [xpagInfo, setXpagInfo] = useState<XPagEnvInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [purgingSeed, setPurgingSeed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -113,30 +112,6 @@ export function AdminSettingsView() {
       setNotice("Configurações operacionais salvas e aplicadas em tempo real.");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handlePurgeSeed = async () => {
-    setPurgingSeed(true);
-    setNotice(null);
-    setErrorMsg(null);
-    try {
-      const res = await fetch("/api/admin/settings", { method: "POST" });
-      const json = (await res.json().catch(() => null)) as {
-        ok?: boolean;
-        deletedTransactions?: number;
-        adjustedWallets?: number;
-        message?: string;
-      } | null;
-      if (!res.ok || !json?.ok) {
-        setErrorMsg(json?.message || "Falha ao limpar dados de seed no banco.");
-        return;
-      }
-      setNotice(
-        `Limpeza concluída no PostgreSQL: ${json.deletedTransactions ?? 0} transação(ões) TXN-SEED removida(s) e ${json.adjustedWallets ?? 0} carteira(s) ajustada(s).`,
-      );
-    } finally {
-      setPurgingSeed(false);
     }
   };
 
@@ -324,28 +299,6 @@ export function AdminSettingsView() {
             );
           })}
         </div>
-      </Card>
-
-      {/* Seed / Demo Cleanup */}
-      <Card className="flex flex-wrap items-center justify-between gap-4 border-amber-500/25 p-5 sm:p-6">
-        <div className="space-y-1">
-          <h3 className="text-foreground text-sm font-semibold">
-            Limpar dados fictícios de demonstração (TXN-SEED*)
-          </h3>
-          <p className="text-muted-foreground max-w-2xl text-xs">
-            Remove do PostgreSQL as transações e saldos fictícios criados pelo seed inicial (ex.: R$ 12.000, $ 2.500, € 800, USDT 1.500), mantendo apenas movimentações reais.
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={purgingSeed || loading}
-          onClick={handlePurgeSeed}
-          className="border-amber-500/40 text-amber-200 hover:bg-amber-500/10"
-        >
-          <Trash2 className="size-4" />
-          {purgingSeed ? "Limpando..." : "Limpar TXN-SEED* do banco"}
-        </Button>
       </Card>
     </form>
   );
