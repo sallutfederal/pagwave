@@ -1,5 +1,6 @@
 import "server-only";
 import crypto from "node:crypto";
+import { notifyWebhookDeliveryFailure } from "@/lib/xpag/store";
 
 const RETRY_DELAYS_MS = [0, 2000, 6000];
 
@@ -45,7 +46,7 @@ export async function dispatchSignedWebhook(params: {
 }
 
 export function enqueueWebhookDeliveries(
-  targets: Array<{ webhookUrl: string; clientSecret: string }>,
+  targets: Array<{ userId?: string; webhookUrl: string; clientSecret: string }>,
   rawBody: string,
 ) {
   for (const target of targets) {
@@ -53,7 +54,10 @@ export function enqueueWebhookDeliveries(
       url: target.webhookUrl,
       clientSecret: target.clientSecret,
       rawBody,
+    }).then((ok) => {
+      if (!ok && target.userId) {
+        void notifyWebhookDeliveryFailure(target.userId, target.webhookUrl);
+      }
     });
   }
 }
-

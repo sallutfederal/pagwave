@@ -304,7 +304,7 @@ export async function recordXPagWebhook(input: {
 }): Promise<{
   duplicate: boolean;
   event: WebhookEventRecord;
-  forwardTargets?: Array<{ webhookUrl: string; clientSecret: string }>;
+  forwardTargets?: Array<{ userId: string; webhookUrl: string; clientSecret: string }>;
 }> {
   const p = input.payload;
   const type = String(p.type ?? p.event ?? "unknown");
@@ -324,7 +324,7 @@ export async function recordXPagWebhook(input: {
   const pg = await gatewayStrict<{
     duplicate: boolean;
     event: WebhookEventRecord;
-    forwardTargets: Array<{ webhookUrl: string; secretEncrypted: string }>;
+    forwardTargets: Array<{ userId: string; webhookUrl: string; secretEncrypted: string }>;
   }>("/webhooks/record", {
     method: "POST",
     body: {
@@ -347,6 +347,7 @@ export async function recordXPagWebhook(input: {
     .map((t) => {
       try {
         return {
+          userId: t.userId,
           webhookUrl: t.webhookUrl,
           clientSecret: decryptSecret(t.secretEncrypted),
         };
@@ -354,13 +355,20 @@ export async function recordXPagWebhook(input: {
         return null;
       }
     })
-    .filter((t): t is { webhookUrl: string; clientSecret: string } => t !== null);
+    .filter((t): t is { userId: string; webhookUrl: string; clientSecret: string } => t !== null);
 
   return {
     duplicate: pg.duplicate,
     event: pg.event,
     forwardTargets: decryptedTargets,
   };
+}
+
+export async function notifyWebhookDeliveryFailure(userId: string, url: string): Promise<void> {
+  await gatewayStrict("/notifications/webhook-failure", {
+    method: "POST",
+    body: { userId, url },
+  }).catch(() => undefined);
 }
 
 // ── Pagwave Gateway Credentials ─────────────────────────────────────────────

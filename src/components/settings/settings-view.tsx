@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
+  BellRing,
   CheckCircle2,
   ExternalLink,
   FileCheck2,
@@ -10,7 +11,9 @@ import {
   LogOut,
   Moon,
   Save,
+  Send,
   ShieldCheck,
+  Smartphone,
   Sun,
   SunMoon,
   Trash2,
@@ -21,6 +24,7 @@ import { useTheme } from "next-themes";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { useI18n } from "@/components/locale-provider";
+import { triggerNotificationsRefresh } from "@/components/notifications/notification-bell";
 import { AvatarUpload } from "@/components/profile/avatar-upload";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
@@ -34,6 +38,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  detectDeviceInfo,
+  getCurrentBrowserPushSubscription,
+  subscribeCurrentDevicePush,
+  unsubscribeCurrentDevicePush,
+  type DeviceInfo,
+} from "@/lib/push-client";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
 
@@ -121,14 +132,43 @@ export function SettingsView() {
   const [securityError, setSecurityError] = useState<string | null>(null);
   const [securityBusy, setSecurityBusy] = useState(false);
 
+  // Push notifications state (PC / Notebook / Android / iPhone PWA)
+  const [pushVapidKey, setPushVapidKey] = useState<string | null>(null);
+  const [pushDevices, setPushDevices] = useState<
+    Array<{ id: string; endpoint: string; deviceLabel: string; platform: string; updatedAt: string }>
+  >([]);
+  const [browserSubscribed, setBrowserSubscribed] = useState(false);
+  const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushNotice, setPushNotice] = useState<string | null>(null);
+  const [pushError, setPushError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [profRes, kycRes] = await Promise.allSettled([
+      const [profRes, kycRes, pushRes, browserSub] = await Promise.allSettled([
         fetch("/api/auth/profile", { cache: "no-store" }),
         fetch("/api/auth/kyc", { cache: "no-store" }),
+        fetch("/api/notifications/push", { cache: "no-store" }),
+        getCurrentBrowserPushSubscription(),
       ]);
       if (cancelled) return;
+
+      setDeviceInfo(detectDeviceInfo());
+      if (browserSub.status === "fulfilled") {
+        setBrowserSubscribed(Boolean(browserSub.value));
+      }
+
+      if (pushRes.status === "fulfilled" && pushRes.value.ok) {
+        const p = (await pushRes.value.json().catch(() => null)) as {
+          publicKey?: string;
+          devices?: typeof pushDevices;
+        } | null;
+        if (!cancelled && p) {
+          if (p.publicKey) setPushVapidKey(p.publicKey);
+          if (p.devices) setPushDevices(p.devices);
+        }
+      }
 
       if (profRes.status === "fulfilled" && profRes.value.ok) {
         const j = (await profRes.value.json().catch(() => null)) as {
@@ -171,6 +211,117 @@ export function SettingsView() {
       cancelled = true;
     };
   }, []);
+
+  async function togglePref(key: keyof typeof prefs, checked: boolean) {
+    const next = { ...prefs, [key]: checked };
+    setPrefs(next);
+    setPushNotice(null);
+    setPushError(null);
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferences: next }),
+      });
+      if (!res.ok) {
+        setPrefs((prev) => ({ ...prev, [key]: !checked }));
+        setPushError("Não foi possível salvar a preferência agora.");
+      } else {
+        setPushNotice("Preferência de notificação salva.");
+      }
+    } catch {
+      setPrefs((prev) => ({ ...prev, [key]: !checked }));
+      setPushError("Erro de rede ao salvar preferência.");
+    }
+  }
+
+  async function refreshPushStatus() {
+    const [pushRes, browserSub] = await Promise.allSettled([
+      fetch("/api/notifications/push", { cache: "no-store" }),
+      getCurrentBrowserPushSubscription(),
+    ]);
+    if (browserSub.status === "fulfilled") {
+      setBrowserSubscribed(Boolean(browserSub.value));
+    }
+    if (pushRes.status === "fulfilled" && pushRes.value.ok) {
+      const p = (await pushRes.value.json().catch(() => null)) as {
+        publicKey?: string;
+        devices?: typeof pushDevices;
+      } | null;
+      if (p?.publicKey) setPushVapidKey(p.publicKey);
+      if (p?.devices) setPushDevices(p.devices);
+    }
+  }
+
+  async function handleEnablePush() {
+    setPushBusy(true);
+    setPushNotice(null);
+    setPushError(null);
+    try {
+      let vapid = pushVapidKey;
+      if (!vapid) {
+        const res = await fetch("/api/notifications/push", { cache: "no-store" });
+        const json = (await res.json().catch(() => null)) as { publicKey?: string } | null;
+        vapid = json?.publicKey ?? null;
+      }
+      if (!vapid) {
+        throw new Error("Chave VAPID indisponível no servidor.");
+      }
+      await subscribeCurrentDevicePush(vapid);
+      await refreshPushStatus();
+      setPushNotice("Notificações Push ativadas neste aparelho!");
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : "Falha ao ativar Push.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleDisablePush() {
+    setPushBusy(true);
+    setPushNotice(null);
+    setPushError(null);
+    try {
+      await unsubscribeCurrentDevicePush();
+      await refreshPushStatus();
+      setPushNotice("Notificações Push desativadas neste aparelho.");
+    } catch {
+      setPushError("Não foi possível desativar neste aparelho.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
+
+  async function handleNotificationAction(action: "test" | "weekly_digest") {
+    setPushBusy(true);
+    setPushNotice(null);
+    setPushError(null);
+    try {
+      const res = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        pushDelivered?: number;
+        pushTotal?: number;
+        message?: string;
+      } | null;
+      if (!res.ok || !json?.ok) {
+        setPushError(json?.message || "Não foi possível enviar notificação.");
+        return;
+      }
+      triggerNotificationsRefresh();
+      setPushNotice(
+        json.pushTotal && json.pushTotal > 0
+          ? `Enviado para o sininho e para ${json.pushDelivered ?? 0}/${json.pushTotal} aparelho(s) Push!`
+          : "Notificação registrada no sininho (ative o Push abaixo para receber fora do navegador).",
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   async function saveProfileAndPrefs() {
     setSavingProfile(true);
@@ -526,13 +677,114 @@ export function SettingsView() {
                 </div>
                 <Switch
                   checked={prefs[row.key]}
-                  onCheckedChange={(checked) =>
-                    setPrefs((prev) => ({ ...prev, [row.key]: checked }))
-                  }
+                  onCheckedChange={(checked) => void togglePref(row.key, checked)}
                   label={row.label}
                 />
               </div>
             ))}
+
+            <div className="border-line bg-surface-subtle/60 mt-4 space-y-3 rounded-2xl border p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="text-accent size-4" />
+                  <div>
+                    <p className="text-foreground text-xs font-semibold">
+                      Notificações Push (PC, Notebook, Android e iPhone)
+                    </p>
+                    <p className="text-muted-foreground text-[11px]">
+                      Receba alertas mesmo com o navegador minimizado ou no celular.
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[10px] font-semibold",
+                    browserSubscribed
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : "bg-white/10 text-muted-foreground",
+                  )}
+                >
+                  {browserSubscribed ? "Ativo neste aparelho" : "Não ativado aqui"}
+                </span>
+              </div>
+
+              {deviceInfo?.isIosSafariOutsidePwa ? (
+                <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200">
+                  <strong>iPhone / iPad (iOS 16.4+):</strong> toque em{" "}
+                  <strong>Compartilhar</strong> → <strong>Adicionar à Tela de Início</strong> e
+                  abra o app pelo ícone instalado para liberar o Push na tela bloqueada do iPhone.
+                </div>
+              ) : null}
+
+              {pushNotice ? (
+                <p className="text-xs font-medium text-emerald-300">{pushNotice}</p>
+              ) : null}
+              {pushError ? <p className="text-xs font-medium text-rose-300">{pushError}</p> : null}
+
+              <div className="flex flex-wrap items-center gap-2">
+                {browserSubscribed ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={pushBusy}
+                    onClick={() => void handleDisablePush()}
+                  >
+                    Desativar Push neste aparelho
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={pushBusy}
+                    onClick={() => void handleEnablePush()}
+                  >
+                    <BellRing className="size-3.5" />
+                    Ativar Push neste aparelho
+                  </Button>
+                )}
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={pushBusy}
+                  onClick={() => void handleNotificationAction("test")}
+                >
+                  <Send className="size-3.5" />
+                  Enviar teste agora
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={pushBusy || !prefs.weeklyDigest}
+                  onClick={() => void handleNotificationAction("weekly_digest")}
+                >
+                  Gerar resumo semanal
+                </Button>
+              </div>
+
+              {pushDevices.length > 0 ? (
+                <div className="border-t border-white/10 pt-2.5 text-[11px]">
+                  <p className="text-muted-foreground mb-1.5 font-medium">
+                    Aparelhos conectados nesta conta ({pushDevices.length}):
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pushDevices.map((d) => (
+                      <span
+                        key={d.id}
+                        className="border-line bg-surface inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] text-foreground"
+                      >
+                        <span className="size-1.5 rounded-full bg-emerald-400" />
+                        {d.deviceLabel}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </SettingsCard>
         </div>
 

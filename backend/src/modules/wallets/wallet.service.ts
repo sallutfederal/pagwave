@@ -11,6 +11,7 @@ import {
   WithdrawalLimitError,
 } from "../../lib/errors.js";
 import { generateTxRef } from "../../lib/id.js";
+import { dispatchUserNotification } from "../../lib/notifications.js";
 import type { CreateWalletInput, DepositInput, ExchangeInput, TransferInput, WithdrawalInput } from "./wallet.schema.js";
 
 // ─── List Wallets ───────────────────────────────────────────────────────────
@@ -413,6 +414,27 @@ export async function internalTransfer(userId: string, input: TransferInput) {
     },
   });
 
+  void dispatchUserNotification({
+    userId,
+    category: "paymentAlerts",
+    type: "TRANSACTION",
+    title: `Transferência enviada: ${amount.toString()} ${fromWallet.currency.code}`,
+    body: `Enviado para ${recipientInfo.email} · Ref: ${refId}`,
+    url: "/transactions",
+    data: { referenceId: refId, currency: fromWallet.currency.code, amount: amount.toString() },
+  });
+
+  void dispatchUserNotification({
+    userId: recipientInfo.id,
+    category: "paymentAlerts",
+    type: "TRANSACTION",
+    title: `Você recebeu +${netAmount.toString()} ${fromWallet.currency.code}`,
+    body: `Transferência P2P de ${senderUser?.email ?? senderLabel} · Ref: ${refId}-IN`,
+    url: "/transactions",
+    data: { referenceId: `${refId}-IN`, currency: fromWallet.currency.code, amount: netAmount.toString() },
+    emailSubject: `Pagwave · Você recebeu +${netAmount.toString()} ${fromWallet.currency.code}`,
+  });
+
   return {
     referenceId: refId,
     amount: amount.toString(),
@@ -732,6 +754,16 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
     },
   });
 
+  void dispatchUserNotification({
+    userId,
+    category: "paymentAlerts",
+    type: "TRANSACTION",
+    title: `Saque solicitado: ${amount.toString()} ${wallet.currency.code}`,
+    body: `Liquidação em processamento · Ref: ${refId}`,
+    url: "/transactions",
+    data: { referenceId: refId, currency: wallet.currency.code, amount: amount.toString() },
+  });
+
   return {
     referenceId: refId,
     amount: amount.toString(),
@@ -865,6 +897,16 @@ export async function exchangeCurrency(userId: string, input: ExchangeInput) {
         received: toAmount.toString(),
       },
     },
+  });
+
+  void dispatchUserNotification({
+    userId,
+    category: "paymentAlerts",
+    type: "TRANSACTION",
+    title: `Conversão concluída: ${amount.toString()} ${fromWallet.currency.code} → ${toCurrency.code}`,
+    body: `Creditado +${toAmount.toString()} ${toCurrency.code} · Ref: ${refId}`,
+    url: "/transactions",
+    data: { referenceId: refId, from: fromWallet.currency.code, to: toCurrency.code },
   });
 
   return {

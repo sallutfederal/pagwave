@@ -57,3 +57,7 @@ export function sendPasswordResetEmail(to: string, token: string) {
     text: `We received a request to reset your password.\n\nChoose a new one here (valid for 1 hour):\n${link}\n\nIf you did not ask for this, your password is unchanged and you can ignore this message.`,
   });
 }
+
+export function sendNotificationEmail(to: string, subject: string, text: string) {
+  return sendEmail({ to, subject, text });
+}

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useLogout } from "@/components/auth/logout";
 import { LanguageToggle } from "@/components/language-toggle";
 import { useI18n } from "@/components/locale-provider";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +29,7 @@ export function Topbar() {
         <div className="flex shrink-0 items-center gap-3" />
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <NotificationBell />
           <LanguageToggle />
           <ThemeToggle />
 

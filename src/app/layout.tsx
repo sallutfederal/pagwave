@@ -37,14 +37,27 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Dashboard — pagwave",
-  description: "Banking dashboard: cards, statistics, recent sales and transactions.",
+  title: "Painel — pagwave",
+  description: "Infraestrutura financeira global: carteira multi-moeda, Pix, cripto e pagamentos P2P.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "pagwave",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
-      lang="en"
+      lang="pt"
       suppressHydrationWarning
       className={`${telegraf.variable} ${jakarta.variable} ${sora.variable} ${inter.variable}`}
     >

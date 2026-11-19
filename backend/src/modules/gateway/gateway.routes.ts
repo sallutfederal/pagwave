@@ -8,6 +8,7 @@ import { env } from "../../config/env.js";
 import { calculateFee, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
 import { BadRequestError, InsufficientFundsError, NotFoundError } from "../../lib/errors.js";
 import { generateTxRef } from "../../lib/id.js";
+import { dispatchUserNotification } from "../../lib/notifications.js";
 import { assertWithdrawalLimits } from "../wallets/wallet.service.js";
 
 function verifyInternalSecret(request: FastifyRequest, reply: FastifyReply) {
@@ -141,7 +142,14 @@ async function settleActivityInLedger(
       where: { id: act.id },
       data: { feeAmount: fee },
     });
-    return;
+    return {
+      userId: act.userId,
+      title: isSelfDeposit
+        ? `Depósito confirmado: +${net.toFixed(2)} ${act.currency}`
+        : `Pagamento recebido: +${net.toFixed(2)} ${act.currency}`,
+      body: `Crédito líquido liberado na sua carteira (${act.rail ?? act.currency}).`,
+      url: "/wallet",
+    };
   }
 
   if (act.kind === "cashout" && (isSettledPaid || isCashoutFailed)) {
@@ -149,9 +157,9 @@ async function settleActivityInLedger(
       where: { id: act.id, settledInLedger: false },
       data: { settledInLedger: true },
     });
-    if (claimed.count === 0) return;
+    if (claimed.count === 0) return null;
 
-    if (!act.externalId) return;
+    if (!act.externalId) return null;
     const reservedTx = await tx.transaction.findFirst({
       where: {
         userId: act.userId,
@@ -160,7 +168,7 @@ async function settleActivityInLedger(
         status: "PROCESSING",
       },
     });
-    if (!reservedTx || !reservedTx.fromWalletId) return;
+    if (!reservedTx || !reservedTx.fromWalletId) return null;
 
     const now = new Date();
     if (isSettledPaid) {
@@ -179,6 +187,12 @@ async function settleActivityInLedger(
           txHash: opts.e2e ?? reservedTx.txHash,
         },
       });
+      return {
+        userId: act.userId,
+        title: `Saque concluído: ${reservedTx.amount.toString()} ${act.currency}`,
+        body: `Liquidação confirmada (${act.rail ?? act.currency}).`,
+        url: "/transactions",
+      };
     } else {
       await tx.wallet.update({
         where: { id: reservedTx.fromWalletId },
@@ -195,8 +209,16 @@ async function settleActivityInLedger(
           flagReason: `Cashout ${normalizedStatus} by provider`,
         },
       });
+      return {
+        userId: act.userId,
+        title: `Saque estornado: ${reservedTx.amount.toString()} ${act.currency}`,
+        body: `O valor foi devolvido para o seu saldo disponível.`,
+        url: "/wallet",
+      };
     }
   }
+
+  return null;
 }
 
 export async function gatewayRoutes(app: FastifyInstance) {
@@ -381,6 +403,16 @@ export async function gatewayRoutes(app: FastifyInstance) {
       },
     });
 
+    void dispatchUserNotification({
+      userId: body.userId,
+      category: "securityNotices",
+      type: "SECURITY",
+      title: "Chave de API rotacionada",
+      body: `Uma nova credencial (${body.clientId}) foi gerada para sua conta.`,
+      url: "/integrations",
+      emailSubject: "Pagwave · Chave de API rotacionada",
+    });
+
     return {
       credential: {
         ...updated,
@@ -389,6 +421,27 @@ export async function gatewayRoutes(app: FastifyInstance) {
         updatedAt: updated.updatedAt.toISOString(),
       },
     };
+  });
+
+  app.post("/notifications/webhook-failure", async (request) => {
+    const body = z
+      .object({
+        userId: z.string().uuid(),
+        url: z.string().max(500),
+      })
+      .parse(request.body);
+
+    const res = await dispatchUserNotification({
+      userId: body.userId,
+      category: "productRenewals",
+      type: "SYSTEM",
+      title: "Falha ao entregar webhook",
+      body: `Não foi possível entregar o evento após múltiplas tentativas para ${body.url}.`,
+      url: "/integrations",
+      emailSubject: "Pagwave · Falha na entrega de Webhook",
+    });
+
+    return { ok: true, ...res };
   });
 
   app.patch("/credentials/:userId", async (request) => {
@@ -608,18 +661,30 @@ export async function gatewayRoutes(app: FastifyInstance) {
       create: { id: "default" },
     });
 
-    const forwardTargets: Array<{ webhookUrl: string; secretEncrypted: string }> = [];
+    const forwardTargets: Array<{ userId: string; webhookUrl: string; secretEncrypted: string }> = [];
     const seenUrls = new Set<string>();
 
     for (const act of matchingActivities) {
-      await prisma.$transaction(async (tx) => {
-        await settleActivityInLedger(tx, act, {
+      const notif = await prisma.$transaction(async (tx) => {
+        return settleActivityInLedger(tx, act, {
           nextStatus,
           settlementAmount: body.amount,
           e2e: body.e2e,
           feeBps: settings.feeBps,
         });
       });
+
+      if (notif) {
+        void dispatchUserNotification({
+          userId: notif.userId,
+          category: "paymentAlerts",
+          type: "TRANSACTION",
+          title: notif.title,
+          body: notif.body,
+          url: notif.url,
+          emailSubject: `Pagwave · ${notif.title}`,
+        });
+      }
 
       const cred = await prisma.gatewayCredential.findUnique({
         where: { userId: act.userId },
@@ -632,6 +697,7 @@ export async function gatewayRoutes(app: FastifyInstance) {
       if (targetUrl && cred && !seenUrls.has(targetUrl)) {
         seenUrls.add(targetUrl);
         forwardTargets.push({
+          userId: act.userId,
           webhookUrl: targetUrl,
           secretEncrypted: cred.secretEncrypted,
         });
@@ -677,13 +743,24 @@ export async function gatewayRoutes(app: FastifyInstance) {
     });
 
     for (const act of matched) {
-      await prisma.$transaction(async (tx) => {
-        await settleActivityInLedger(tx, act, {
+      const notif = await prisma.$transaction(async (tx) => {
+        return settleActivityInLedger(tx, act, {
           nextStatus: body.status,
           e2e: body.e2e,
           feeBps: settings.feeBps,
         });
       });
+      if (notif) {
+        void dispatchUserNotification({
+          userId: notif.userId,
+          category: "paymentAlerts",
+          type: "TRANSACTION",
+          title: notif.title,
+          body: notif.body,
+          url: notif.url,
+          emailSubject: `Pagwave · ${notif.title}`,
+        });
+      }
     }
     return { updated: matched.length > 0 };
   });
@@ -916,6 +993,15 @@ export async function gatewayRoutes(app: FastifyInstance) {
           completedAt: new Date(),
         },
       });
+    });
+
+    void dispatchUserNotification({
+      userId: body.userId,
+      category: "paymentAlerts",
+      type: "TRANSACTION",
+      title: `Conversão FX: ${body.fromAmount} ${body.fromCurrency} → ${body.toAmount} ${body.toCurrency}`,
+      body: "Saldo convertido e disponível imediatamente na sua carteira.",
+      url: "/transactions",
     });
 
     return { ok: true };

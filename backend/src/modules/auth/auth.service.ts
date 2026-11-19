@@ -11,6 +11,7 @@ import {
 } from "../../lib/errors.js";
 import { generateSecureToken } from "../../lib/id.js";
 import { sendPasswordResetEmail, sendVerificationEmail } from "../../lib/mailer.js";
+import { dispatchUserNotification } from "../../lib/notifications.js";
 import type {
   ChangePasswordInput,
   ForgotPasswordInput,
@@ -180,6 +181,18 @@ export async function loginUser(input: LoginInput, meta: { ip?: string; userAgen
       ipAddress: meta.ip ?? null,
       userAgent: meta.userAgent ?? null,
     },
+  });
+
+  void dispatchUserNotification({
+    userId: user.id,
+    category: "securityNotices",
+    type: "SECURITY",
+    title: "Novo login na sua conta pagwave",
+    body: meta.ip
+      ? `Acesso realizado a partir do IP ${meta.ip}. Se não foi você, altere sua senha imediatamente.`
+      : "Um novo acesso à sua conta foi detectado.",
+    url: "/settings",
+    emailSubject: "Pagwave · Alerta de segurança: novo login detectado",
   });
 
   return {
@@ -366,6 +379,16 @@ export async function resetPassword(input: ResetPasswordInput) {
     },
   });
 
+  void dispatchUserNotification({
+    userId: user.id,
+    category: "securityNotices",
+    type: "SECURITY",
+    title: "Senha redefinida",
+    body: "Sua senha foi redefinida e todas as sessões anteriores foram encerradas.",
+    url: "/settings",
+    emailSubject: "Pagwave · Senha redefinida",
+  });
+
   return { email: user.email };
 }
 
@@ -394,6 +417,16 @@ export async function changePassword(userId: string, input: ChangePasswordInput)
       resourceId: userId,
       details: { method: "manual" },
     },
+  });
+
+  void dispatchUserNotification({
+    userId,
+    category: "securityNotices",
+    type: "SECURITY",
+    title: "Senha alterada",
+    body: "A senha da sua conta pagwave foi alterada com sucesso.",
+    url: "/settings",
+    emailSubject: "Pagwave · Senha alterada",
   });
 }
 
@@ -466,6 +499,16 @@ export async function confirm2FA(userId: string, code: string) {
     },
   });
 
+  void dispatchUserNotification({
+    userId,
+    category: "securityNotices",
+    type: "SECURITY",
+    title: "2FA ativado",
+    body: "A autenticação em duas etapas foi ativada na sua conta.",
+    url: "/settings",
+    emailSubject: "Pagwave · 2FA ativado",
+  });
+
   return { enabled: true };
 }
 
@@ -489,5 +532,15 @@ export async function disable2FA(userId: string, password: string) {
       resource: "user",
       resourceId: userId,
     },
+  });
+
+  void dispatchUserNotification({
+    userId,
+    category: "securityNotices",
+    type: "SECURITY",
+    title: "2FA desativado",
+    body: "A autenticação em duas etapas da sua conta foi desativada.",
+    url: "/settings",
+    emailSubject: "Pagwave · 2FA desativado",
   });
 }

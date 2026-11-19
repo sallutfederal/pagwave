@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../../config/database.js";
 import { BadRequestError, NotFoundError } from "../../lib/errors.js";
 import { adminGuard } from "../../middleware/auth.js";
+import { dispatchUserNotification } from "../../lib/notifications.js";
 import { confirmDeposit, rejectDeposit } from "../wallets/wallet.service.js";
 
 const updateAdminUserSchema = z.object({
@@ -229,16 +230,17 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: doc.userId,
-        type: "KYC",
-        title: body.status === "APPROVED" ? "KYC Aprovado" : "KYC Rejeitado",
-        body:
-          body.status === "APPROVED"
-            ? `Sua verificação de identidade foi aprovada (nível ${nextLevel}).`
-            : `Seu documento foi rejeitado${body.reviewNote ? `: ${body.reviewNote}` : "."}`,
-      },
+    void dispatchUserNotification({
+      userId: doc.userId,
+      category: "always",
+      type: "KYC",
+      title: body.status === "APPROVED" ? "KYC Aprovado" : "KYC Rejeitado",
+      body:
+        body.status === "APPROVED"
+          ? `Sua verificação de identidade foi aprovada (nível ${nextLevel}).`
+          : `Seu documento foi rejeitado${body.reviewNote ? `: ${body.reviewNote}` : "."}`,
+      url: "/settings",
+      emailSubject: body.status === "APPROVED" ? "Pagwave · KYC aprovado" : "Pagwave · KYC rejeitado",
     });
 
     await prisma.auditLog.create({
