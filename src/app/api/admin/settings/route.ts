@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backendFetch } from "@/lib/backend";
 import { XPagError, getXPagConfig } from "@/lib/xpag/client";
 import { XPAG_CURRENCIES } from "@/lib/xpag/currencies";
 import { getAdminConfig, updateAdminConfig } from "@/lib/xpag/store";
@@ -52,6 +53,17 @@ export function PATCH(request: Request) {
 
     const updated = await updateAdminConfig(parsed.data);
     return { ok: true, config: updated };
+  });
+}
+
+export function POST() {
+  return adminPrivateJson(async () => {
+    const result = await backendFetch<{
+      ok: boolean;
+      deletedTransactions: number;
+      adjustedWallets: number;
+    }>("/admin/purge-seed-data", { method: "POST", body: {} });
+    return result;
   });
 }
 

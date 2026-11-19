@@ -48,12 +48,12 @@ export function AvatarUpload() {
     setError(null);
 
     if (!ACCEPTED.includes(file.type)) {
-      setError("Use a PNG, JPEG, WebP or AVIF image.");
+      setError("Use uma imagem PNG, JPEG, WebP ou AVIF.");
       return;
     }
 
     if (file.size > MAX_BYTES) {
-      setError("The image must be smaller than 5 MB.");
+      setError("A imagem deve ter menos de 5 MB.");
       return;
     }
 
@@ -62,7 +62,7 @@ export function AvatarUpload() {
       setPreview(dataUrl);
       saveAvatar(userId, dataUrl);
     } catch {
-      setError("We could not read that image. Try another file.");
+      setError("Não foi possível ler essa imagem. Tente outro arquivo.");
     }
   }
 
@@ -82,9 +82,9 @@ export function AvatarUpload() {
 
   return (
     <Card className="p-5">
-      <h2 className="text-foreground text-[15px] font-semibold">Profile photo</h2>
+      <h2 className="text-foreground text-[15px] font-semibold">Foto de perfil</h2>
       <p className="text-muted-foreground mt-1 mb-5 text-xs">
-        Shown in the topbar, on statements and in shared reports. Square crops look best.
+        Exibida localmente no seu perfil neste navegador. Recortes quadrados ficam melhores.
       </p>
 
       <div className="flex flex-wrap items-center gap-5">
@@ -97,7 +97,7 @@ export function AvatarUpload() {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
-          aria-label="Change profile photo"
+          aria-label="Alterar foto de perfil"
           className={cn(
             "group relative grid size-28 shrink-0 place-items-center rounded-full ring-2 transition",
             dragging ? "ring-accent" : "ring-transparent hover:ring-accent/40",
@@ -123,17 +123,17 @@ export function AvatarUpload() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-              <Upload /> Upload photo
+              <Upload /> Enviar foto
             </Button>
             {current ? (
               <Button variant="ghost" size="sm" onClick={removePhoto}>
-                <Trash2 /> Remove
+                <Trash2 /> Remover
               </Button>
             ) : null}
           </div>
 
           <p className="text-muted-foreground text-[11px]">
-            PNG, JPEG, WebP or AVIF · up to 5 MB · resized to 256×256.
+            PNG, JPEG, WebP ou AVIF · até 5 MB · redimensionada para 256×256.
           </p>
 
           {error ? (

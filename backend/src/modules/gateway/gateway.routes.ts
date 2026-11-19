@@ -1156,6 +1156,23 @@ export async function gatewayRoutes(app: FastifyInstance) {
     };
   });
 
+  app.get("/users/:userId/status", async (request) => {
+    const { userId } = request.params as { userId: string };
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { status: true },
+    });
+    const suspended =
+      !user ||
+      user.status === "SUSPENDED" ||
+      user.status === "BLOCKED" ||
+      user.status === "CLOSED";
+    return {
+      suspended,
+      status: user?.status ?? "NOT_FOUND",
+    };
+  });
+
   app.get("/admin/integrations", async () => {
     const [keys, logs, webhooks] = await Promise.all([
       prisma.gatewayCredential.findMany({

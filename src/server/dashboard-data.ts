@@ -22,7 +22,6 @@ import {
   type Wallet,
 } from "@/lib/schemas";
 import { SESSION_EXPIRED_PATH, getCurrentUser } from "@/server/auth";
-import { listWalletFeed } from "@/lib/xpag/store";
 
 /* -------------------------------------------------------------------------- */
 /*                               Backend access                               */
@@ -286,31 +285,38 @@ const quickActions = [
 ] as const;
 
 export async function getRecentSales() {
-  const user = await getCurrentUser();
-  const { activities } = await listWalletFeed(user.id).catch(() => ({
-    activities: [],
-    webhooks: [],
-  }));
+  const { data } = await authed<{ data: BackendTransaction[] }>("/transactions?limit=30");
 
-  const rows = activities
-    .filter((a) => a.kind === "cashin")
+  const rows = data
+    .filter((tx) => {
+      const kind = TRANSACTION_KINDS[tx.type];
+      return kind?.direction === "in";
+    })
     .slice(0, 6)
-    .map((a) => ({
-      id: a.id,
-      customer: {
-        name: a.destinationSummary || `${a.currency} ${a.rail || "Cash-in"}`,
-        email: a.externalId || a.requestNumber || user.email,
-        avatar: { url: "", initials: a.currency.slice(0, 2) },
-      },
-      status:
-        a.status === "paid" || a.status === "completed"
-          ? ("Success" as const)
-          : a.status === "failed" || a.status === "expired"
-            ? ("Failed" as const)
-            : ("Process" as const),
-      amount: typeof a.amount === "number" ? a.amount : 0,
-      currency: a.currency as Sale["currency"],
-    }))
+    .map((tx) => {
+      const kind = TRANSACTION_KINDS[tx.type] ?? {
+        label: tx.type,
+        badge: "IN",
+        direction: "in" as const,
+      };
+      return {
+        id: tx.id,
+        customer: {
+          name: tx.description ?? kind.label,
+          email: tx.referenceId,
+          avatar: { url: "", initials: tx.currencyCode.slice(0, 2) },
+        },
+        date: tx.createdAt,
+        status:
+          tx.status === "COMPLETED"
+            ? ("Success" as const)
+            : tx.status === "PENDING" || tx.status === "PROCESSING" || tx.status === "FROZEN"
+              ? ("Process" as const)
+              : ("Failed" as const),
+        amount: Number(tx.amount),
+        currency: tx.currencyCode as Sale["currency"],
+      };
+    })
     .filter((row) => currencySchema.safeParse(row.currency).success);
 
   return recentSalesSchema.parse({ sales: rows });

@@ -69,6 +69,12 @@ const unitsPerUsd: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
   BRL: 5.2,
+  MXN: 17.5,
+  COP: 4000,
+  ARS: 950,
+  BOB: 6.91,
+  CLP: 920,
+  VES: 36.5,
   USDT: 1,
   USDC: 1,
 };
@@ -222,20 +228,12 @@ async function seedDemoAccount() {
     },
   });
 
-  const openingBalances: Record<string, string> = {
-    USD: '2500.00',
-    EUR: '800.00',
-    BRL: '12000.00',
-    USDT: '1500.000000',
-  };
-
-  const wallets = new Map<string, string>();
-
-  for (const [code, balance] of Object.entries(openingBalances)) {
+  // Ensure zeroed default wallets exist without injecting any fictional balances or transactions.
+  for (const code of ['USD', 'EUR', 'BRL', 'USDT']) {
     const currency = await prisma.currency.findUniqueOrThrow({ where: { code } });
     const type = currency.type === 'CRYPTO' ? 'CRYPTO' : 'FIAT';
 
-    const wallet = await prisma.wallet.upsert({
+    await prisma.wallet.upsert({
       where: {
         unique_user_currency_wallet: { userId: user.id, currencyId: currency.id, type },
       },
@@ -246,69 +244,8 @@ async function seedDemoAccount() {
         type,
         label: `${code} Wallet`,
         isDefault: code === 'USD',
-        balance,
-        availableBalance: balance,
-      },
-    });
-
-    wallets.set(code, wallet.id);
-  }
-
-  // A small history so the dashboard has something to show.
-  const history = [
-    {
-      ref: 'TXN-SEED000001',
-      type: 'DEPOSIT',
-      currency: 'BRL',
-      amount: '12000.00',
-      description: 'Deposit via PIX',
-      daysAgo: 12,
-    },
-    {
-      ref: 'TXN-SEED000002',
-      type: 'DEPOSIT',
-      currency: 'USD',
-      amount: '2500.00',
-      description: 'Deposit via WIRE',
-      daysAgo: 9,
-    },
-    {
-      ref: 'TXN-SEED000003',
-      type: 'DEPOSIT',
-      currency: 'USDT',
-      amount: '1500.000000',
-      description: 'Deposit via CRYPTO',
-      daysAgo: 6,
-    },
-    {
-      ref: 'TXN-SEED000004',
-      type: 'DEPOSIT',
-      currency: 'EUR',
-      amount: '800.00',
-      description: 'Deposit via WIRE',
-      daysAgo: 3,
-    },
-  ] as const;
-
-  for (const entry of history) {
-    const createdAt = new Date(Date.now() - entry.daysAgo * 24 * 60 * 60 * 1000);
-
-    await prisma.transaction.upsert({
-      where: { referenceId: entry.ref },
-      update: {},
-      create: {
-        referenceId: entry.ref,
-        userId: user.id,
-        type: entry.type,
-        status: 'COMPLETED',
-        toWalletId: wallets.get(entry.currency),
-        amount: entry.amount,
-        fee: '0',
-        netAmount: entry.amount,
-        currencyCode: entry.currency,
-        description: entry.description,
-        completedAt: createdAt,
-        createdAt,
+        balance: '0',
+        availableBalance: '0',
       },
     });
   }

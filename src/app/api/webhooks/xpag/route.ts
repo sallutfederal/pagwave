@@ -1,9 +1,6 @@
 import { enqueueWebhookDeliveries } from "@/lib/webhook-dispatch";
 import { verifyXPagWebhookSignature } from "@/lib/xpag/client";
-import {
-  findWebhookForwardTargets,
-  recordXPagWebhook,
-} from "@/lib/xpag/store";
+import { recordXPagWebhook } from "@/lib/xpag/store";
 
 export async function POST(request: Request) {
   // Always inspect exact raw body bytes before parsing JSON.
@@ -32,18 +29,8 @@ export async function POST(request: Request) {
     verifiedSignature: true,
   });
 
-  if (!duplicate) {
-    const targets =
-      forwardTargets && forwardTargets.length > 0
-        ? forwardTargets
-        : await findWebhookForwardTargets({
-            requestNumber: event.requestNumber,
-            transactionId: event.transactionId,
-            externalId: event.externalId,
-            origin: event.origin,
-          });
-
-    enqueueWebhookDeliveries(targets, rawBody);
+  if (!duplicate && forwardTargets && forwardTargets.length > 0) {
+    enqueueWebhookDeliveries(forwardTargets, rawBody);
   }
 
   return Response.json(

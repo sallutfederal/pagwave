@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { backendFetch } from "@/lib/backend";
 import { XPagError } from "@/lib/xpag/client";
-import {
-  listAdminUsersWithMetrics,
-  updateAdminUserRecord,
-} from "@/lib/xpag/store";
 import { adminPrivateJson } from "@/server/admin-auth";
 
 const UpdateUserSchema = z.object({
@@ -22,20 +18,15 @@ const UpdateUserSchema = z.object({
 
 export function GET() {
   return adminPrivateJson(async () => {
-    try {
-      const [usersPayload, kycPayload] = await Promise.all([
-        backendFetch<{ users: unknown[] }>("/admin/users"),
-        backendFetch<{ documents: unknown[] }>("/admin/kyc"),
-      ]);
-      return {
-        ok: true,
-        users: usersPayload.users,
-        kycDocuments: kycPayload.documents,
-      };
-    } catch {
-      const users = await listAdminUsersWithMetrics();
-      return { ok: true, users, kycDocuments: [] };
-    }
+    const [usersPayload, kycPayload] = await Promise.all([
+      backendFetch<{ users: unknown[] }>("/admin/users"),
+      backendFetch<{ documents: unknown[] }>("/admin/kyc"),
+    ]);
+    return {
+      ok: true,
+      users: usersPayload.users,
+      kycDocuments: kycPayload.documents,
+    };
   });
 }
 
@@ -82,24 +73,15 @@ export function PATCH(request: Request) {
       );
     }
 
-    try {
-      const res = await backendFetch<{ user: unknown }>(`/admin/users/${d.userId}`, {
-        method: "PATCH",
-        body: {
-          ...(d.role ? { role: d.role } : {}),
-          ...(nextStatus ? { status: nextStatus } : {}),
-          ...(d.kycStatus ? { kycStatus: d.kycStatus } : {}),
-          ...(d.kycLevel !== undefined ? { kycLevel: d.kycLevel } : {}),
-        },
-      });
-      return { ok: true, user: res.user };
-    } catch {
-      const updated = await updateAdminUserRecord(d.userId, {
-        kycStatus: d.kycStatus,
-        kycLevel: d.kycLevel,
-        suspended: d.suspended,
-      });
-      return { ok: true, user: updated };
-    }
+    const res = await backendFetch<{ user: unknown }>(`/admin/users/${d.userId}`, {
+      method: "PATCH",
+      body: {
+        ...(d.role ? { role: d.role } : {}),
+        ...(nextStatus ? { status: nextStatus } : {}),
+        ...(d.kycStatus ? { kycStatus: d.kycStatus } : {}),
+        ...(d.kycLevel !== undefined ? { kycLevel: d.kycLevel } : {}),
+      },
+    });
+    return { ok: true, user: res.user };
   });
 }

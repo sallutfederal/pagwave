@@ -5,7 +5,6 @@ import { cache } from "react";
 
 import { BackendError, backendFetch } from "@/lib/backend";
 import type { SessionUser } from "@/lib/session-user";
-import { syncAccountSnapshot } from "@/lib/xpag/store";
 
 type MeResponse = {
   id: string;
@@ -39,7 +38,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser> => {
     const last = me.profile?.lastName ?? "";
     const name = me.profile?.displayName || `${first} ${last}`.trim() || me.email;
 
-    const user: SessionUser = {
+    return {
       id: me.id,
       email: me.email,
       name,
@@ -50,19 +49,6 @@ export const getCurrentUser = cache(async (): Promise<SessionUser> => {
       kycStatus: me.profile?.kycStatus ?? "NOT_STARTED",
       kycLevel: me.profile?.kycLevel ?? 0,
     };
-
-    await syncAccountSnapshot({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      kycStatus: user.kycStatus,
-      kycLevel: user.kycLevel,
-      emailVerified: user.emailVerified,
-      twoFactorEnabled: user.twoFactorEnabled,
-    }).catch(() => {});
-
-    return user;
   } catch (error) {
     if (error instanceof BackendError && error.status === 401) {
       redirect(SESSION_EXPIRED_PATH);
@@ -74,8 +60,10 @@ export const getCurrentUser = cache(async (): Promise<SessionUser> => {
 
 function initialsOf(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  const letters = parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : (parts[0] ?? "?").slice(0, 2);
+  const letters =
+    parts.length > 1
+      ? `${parts[0][0]}${parts[parts.length - 1][0]}`
+      : (parts[0] ?? "?").slice(0, 2);
 
   return letters.toUpperCase();
 }
-

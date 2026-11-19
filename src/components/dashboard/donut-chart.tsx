@@ -45,32 +45,43 @@ export function DonutChart({ segments, total, label, currency }: DonutChartProps
         height={SIZE}
         viewBox={`0 0 ${SIZE} ${SIZE}`}
         role="img"
-        aria-label={`${label}: ${formatCurrency({ amount: total, currency }, { symbolSpacing: false })}`}
+        aria-label={`${label}: ${formatCurrency({ amount: total, currency, fractionDigits: 2 }, { symbolSpacing: false })}`}
         className="-rotate-90"
       >
-        {arcs.map((arc, index) => (
-          <circle
-            key={arc.id}
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={RADIUS}
-            fill="none"
-            strokeWidth={STROKE}
-            strokeLinecap="round"
-            stroke={SEGMENT_COLORS[arc.id] ?? "var(--color-accent)"}
-            strokeDasharray={`${arc.length} ${CIRCUMFERENCE - arc.length}`}
-            strokeDashoffset={arc.offset}
-            style={{
-              transition: "stroke-dasharray 500ms ease, stroke-dashoffset 500ms ease",
-              transitionDelay: `${index * 60}ms`,
-            }}
-          />
-        ))}
+        <circle
+          cx={SIZE / 2}
+          cy={SIZE / 2}
+          r={RADIUS}
+          fill="none"
+          strokeWidth={STROKE}
+          stroke="var(--color-line)"
+          strokeOpacity={0.35}
+        />
+        {arcs
+          .filter((arc) => arc.length > 0)
+          .map((arc, index) => (
+            <circle
+              key={arc.id}
+              cx={SIZE / 2}
+              cy={SIZE / 2}
+              r={RADIUS}
+              fill="none"
+              strokeWidth={STROKE}
+              strokeLinecap="round"
+              stroke={SEGMENT_COLORS[arc.id] ?? "var(--color-accent)"}
+              strokeDasharray={`${arc.length} ${CIRCUMFERENCE - arc.length}`}
+              strokeDashoffset={arc.offset}
+              style={{
+                transition: "stroke-dasharray 500ms ease, stroke-dashoffset 500ms ease",
+                transitionDelay: `${index * 60}ms`,
+              }}
+            />
+          ))}
       </svg>
 
       <div className="absolute inset-0 grid place-items-center">
         <span className="text-foreground text-[19px] font-semibold tabular-nums">
-          {formatCurrency({ amount: total, currency }, { symbolSpacing: false })}
+          {formatCurrency({ amount: total, currency, fractionDigits: 2 }, { symbolSpacing: false })}
         </span>
       </div>
 

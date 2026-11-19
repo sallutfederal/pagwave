@@ -117,7 +117,7 @@ export const saleSchema = z.object({
   id: z.string(),
   customer: z.object({
     name: z.string(),
-    email: z.string().email(),
+    email: z.string(),
     avatar: avatarSchema,
   }),
   date: z.string(),
