@@ -1,20 +1,25 @@
-import { Card } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/format';
-import type { Wallet } from '@/lib/schemas';
+"use client";
+
+import { useI18n } from "@/components/locale-provider";
+import { Card } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/format";
+import type { Wallet } from "@/lib/schemas";
 
 /** One balance per currency: fiat and crypto side by side. */
 export function WalletsStrip({ wallets }: { wallets: Wallet[] }) {
+  const { messages } = useI18n();
+
   if (wallets.length === 0) {
     return (
       <Card className="text-muted-foreground p-5 text-sm">
-        Nenhuma carteira encontrada ainda. Elas são criadas automaticamente ao abrir ou movimentar uma conta.
+        {messages.dashboard.walletsEmpty}
       </Card>
     );
   }
 
   return (
     <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {wallets.map(wallet => (
+      {wallets.map((wallet) => (
         <li key={wallet.id}>
           <Card className="space-y-1.5 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/20">
             <div className="flex items-center justify-between gap-2">
@@ -36,8 +41,8 @@ export function WalletsStrip({ wallets }: { wallets: Wallet[] }) {
                   amount: wallet.frozen,
                   currency: wallet.currency,
                   fractionDigits: 2,
-                })}{' '}
-                bloqueado
+                })}{" "}
+                {messages.dashboard.onHold}
               </p>
             ) : null}
           </Card>

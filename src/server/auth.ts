@@ -1,9 +1,11 @@
 import "server-only";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { BackendError, backendFetch } from "@/lib/backend";
+import { DEFAULT_LOCALE, normalizeLocale } from "@/lib/i18n/types";
 import type { SessionUser } from "@/lib/session-user";
 
 type MeResponse = {
@@ -12,6 +14,7 @@ type MeResponse = {
   role: string;
   emailVerified: boolean;
   twoFactorEnabled: boolean;
+  locale?: string;
   profile: {
     firstName: string;
     lastName: string;
@@ -38,6 +41,20 @@ export const getCurrentUser = cache(async (): Promise<SessionUser> => {
     const last = me.profile?.lastName ?? "";
     const name = me.profile?.displayName || `${first} ${last}`.trim() || me.email;
 
+    let cookieLocale: string | undefined;
+    try {
+      const jar = await cookies();
+      cookieLocale = jar.get(`pagwave_lang_${me.id}`)?.value;
+    } catch {
+      cookieLocale = undefined;
+    }
+
+    const locale = me.locale
+      ? normalizeLocale(me.locale)
+      : cookieLocale
+        ? normalizeLocale(cookieLocale)
+        : DEFAULT_LOCALE;
+
     return {
       id: me.id,
       email: me.email,
@@ -48,6 +65,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser> => {
       twoFactorEnabled: me.twoFactorEnabled,
       kycStatus: me.profile?.kycStatus ?? "NOT_STARTED",
       kycLevel: me.profile?.kycLevel ?? 0,
+      locale,
     };
   } catch (error) {
     if (error instanceof BackendError && error.status === 401) {

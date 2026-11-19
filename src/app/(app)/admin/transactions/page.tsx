@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/layout/page-header";
+import { LocalizedPageHeader } from "@/components/layout/localized-page-header";
 import { AdminTransactionsView } from "@/components/admin/admin-transactions-view";
 
 export const metadata: Metadata = {
@@ -9,12 +9,8 @@ export const metadata: Metadata = {
 export default function AdminTransactionsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Admin · Transações & MED"
-        description="Auditoria global de recebimentos, saques, conversões e disputas MED de todas as contas."
-      />
+      <LocalizedPageHeader section="adminTransactions" />
       <AdminTransactionsView />
     </div>
   );
 }
-

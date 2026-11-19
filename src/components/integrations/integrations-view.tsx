@@ -2,19 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import {
-  BookOpen,
-  Check,
-  Copy,
-  Eye,
-  EyeOff,
-  KeyRound,
-  Play,
-  RefreshCw,
-  Save,
-  ShieldCheck,
-  Webhook,
-} from "lucide-react";
+import { BookOpen, Check, Copy, Eye, EyeOff, KeyRound, Play, RefreshCw, Save, ShieldCheck, Webhook } from "lucide-react";
+import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -94,6 +83,8 @@ function CopyButton({
 const subscribeNoop = () => () => {};
 
 export function IntegrationsView() {
+  const { modules } = useI18n();
+  const mi = modules.integrations;
   const [loading, setLoading] = useState(true);
   const [isSandbox, setIsSandbox] = useState(true);
   const [credential, setCredential] = useState<CredentialData | null>(null);
@@ -317,7 +308,7 @@ export function IntegrationsView() {
           className="bg-accent text-accent-fg hover:bg-accent/90 inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-5 text-xs font-semibold transition-colors"
         >
           <BookOpen className="size-4" />
-          Abrir Documentação (/docs)
+          {mi.docsLink} (/docs)
         </Link>
       </Card>
 
@@ -337,10 +328,10 @@ export function IntegrationsView() {
               </span>
               <div>
                 <h3 className="text-foreground text-sm font-semibold">
-                  Credenciais de API desta conta
+                  {mi.credentialsTitle}
                 </h3>
                 <p className="text-muted-foreground text-xs">
-                  Chaves criptográficas únicas — nenhum outro usuário compartilha este par.
+                  X-Client-Id · X-Client-Secret
                 </p>
               </div>
             </div>

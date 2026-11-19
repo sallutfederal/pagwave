@@ -3,10 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { adminNav } from "@/components/layout/nav-items";
+import { useI18n } from "@/components/locale-provider";
 import { cn } from "@/lib/utils";
 
 export function AdminSubnav() {
   const pathname = usePathname();
+  const { modules } = useI18n();
+
+  const labelFor = (href: string, fallback: string) => {
+    switch (href) {
+      case "/admin":
+        return modules.admin.overviewNav;
+      case "/admin/users":
+        return modules.admin.usersNav;
+      case "/admin/transactions":
+        return modules.admin.txNav;
+      case "/admin/integrations":
+        return modules.admin.integrationsNav;
+      case "/admin/settings":
+        return modules.admin.settingsNav;
+      default:
+        return fallback.replace(/^Admin ·\s*/, "");
+    }
+  };
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
@@ -14,7 +33,6 @@ export function AdminSubnav() {
         const Icon = item.icon;
         const active =
           item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-        const shortLabel = item.label.replace(/^Admin ·\s*/, "");
 
         return (
           <Link
@@ -28,11 +46,10 @@ export function AdminSubnav() {
             )}
           >
             <Icon className="size-3.5" />
-            {shortLabel}
+            {labelFor(item.href, item.label)}
           </Link>
         );
       })}
     </div>
   );
 }
-

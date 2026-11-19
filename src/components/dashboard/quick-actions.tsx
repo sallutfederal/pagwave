@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, Receipt, Send, type LucideIcon } from "lucide-react";
 
+import { useI18n } from "@/components/locale-provider";
 import type { QuickAction } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,23 @@ const actionHref: Record<QuickAction["id"], string> = {
 };
 
 export function QuickActions({ actions }: { actions: QuickAction[] }) {
+  const { messages } = useI18n();
+
+  const labelFor = (id: QuickAction["id"], fallback: string) => {
+    switch (id) {
+      case "transfer":
+        return messages.dashboard.actionTransfer;
+      case "utility":
+        return messages.dashboard.actionDeposit;
+      case "transport":
+        return messages.dashboard.actionWithdraw;
+      case "taxes":
+        return messages.dashboard.actionStatement;
+      default:
+        return fallback;
+    }
+  };
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {actions.map((action) => {
@@ -46,7 +64,9 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
             >
               <Icon className="size-4" strokeWidth={1.9} />
             </span>
-            <span className="truncate text-[13px] font-medium">{action.label}</span>
+            <span className="truncate text-[13px] font-medium">
+              {labelFor(action.id, action.label)}
+            </span>
           </Link>
         );
       })}

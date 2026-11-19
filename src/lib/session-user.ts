@@ -1,3 +1,5 @@
+import type { Locale } from "@/lib/i18n/types";
+
 /** The signed-in user as the browser is allowed to know it (no tokens, no secrets). */
 export type SessionUser = {
   id: string;
@@ -9,5 +11,5 @@ export type SessionUser = {
   twoFactorEnabled: boolean;
   kycStatus: string;
   kycLevel: number;
+  locale: Locale;
 };
-

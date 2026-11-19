@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/components/locale-provider";
 import {
   ArrowLeftRight,
   ArrowRight,
@@ -39,6 +40,8 @@ type ConversionPanelProps = {
 };
 
 export function ConversionPanel({ onSuccessRefresh }: ConversionPanelProps) {
+  const { modules } = useI18n();
+  const mfx = modules.conversion;
   const [from, setFrom] = useState<XPagCurrency>("BRL");
   const [to, setTo] = useState<XPagCurrency>("USDT");
   const [amountInput, setAmountInput] = useState("100");
@@ -111,10 +114,10 @@ export function ConversionPanel({ onSuccessRefresh }: ConversionPanelProps) {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-4">
           <div>
             <h3 className="text-foreground text-base font-semibold">
-              Conversão Interna entre Saldos XPag
+              {mfx.title}
             </h3>
             <p className="text-muted-foreground text-xs">
-              Simule a taxa em tempo real e converta entre moedas fiduciárias e USDT.
+              {mfx.subtitle}
             </p>
           </div>
           <span className="rounded-full border border-white/10 bg-surface-subtle px-2.5 py-1 text-[11px] text-muted-foreground">
@@ -283,6 +286,8 @@ export function HistoryAndLookupPanel({
   activities,
   webhooks,
 }: HistoryAndLookupPanelProps) {
+  const { modules } = useI18n();
+  const mhist = modules.conversion;
   const [lookupKind, setLookupKind] = useState<"cashin" | "cashout">("cashin");
   const [lookupKey, setLookupKey] = useState<
     "transaction_id" | "request_number" | "e2e" | "external_id" | "clabe"
@@ -331,7 +336,7 @@ export function HistoryAndLookupPanel({
       <Card className="space-y-4 p-5">
         <div>
           <h3 className="text-foreground text-sm font-semibold">
-            Consulta Direta na API XPag (/consult-transaction & /consult-cashout)
+            {mhist.lookupTitle} (/consult-transaction &amp; /consult-cashout)
           </h3>
           <p className="text-muted-foreground text-xs">
             Reconcilie qualquer recebimento ou saque por <code className="text-foreground">transaction_id</code>,{" "}
@@ -422,13 +427,13 @@ export function HistoryAndLookupPanel({
         <Card className="space-y-4 p-5 xl:col-span-7">
           <div className="flex items-center justify-between">
             <h3 className="text-foreground text-sm font-semibold">
-              Histórico recente desta conta ({activities.length})
+              {mhist.historyTitle} ({activities.length})
             </h3>
           </div>
 
           {activities.length === 0 ? (
             <p className="text-muted-foreground py-6 text-center text-xs">
-              Nenhuma movimentação registrada ainda nesta carteira.
+              {mhist.historyEmpty}
             </p>
           ) : (
             <div className="space-y-2.5">

@@ -5,6 +5,7 @@ import { HelpCircle } from "lucide-react";
 import { useState } from "react";
 
 import { ChartLegend, DonutChart } from "@/components/dashboard/donut-chart";
+import { useI18n } from "@/components/locale-provider";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -18,18 +19,19 @@ import { api } from "@/lib/api";
 import type { Period, Statistic } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
-const PERIODS: { value: Period; label: string }[] = [
-  { value: "this-month", label: "Este mês" },
-  { value: "last-month", label: "Mês passado" },
-  { value: "last-year", label: "Último ano" },
-];
-
 type StatisticCardProps = {
   initial: Statistic;
 };
 
 export function StatisticCard({ initial }: StatisticCardProps) {
   const [period, setPeriod] = useState<Period>("this-month");
+  const { messages } = useI18n();
+
+  const periods: { value: Period; label: string }[] = [
+    { value: "this-month", label: messages.dashboard.thisMonth },
+    { value: "last-month", label: messages.dashboard.lastMonth },
+    { value: "last-year", label: messages.dashboard.lastYear },
+  ];
 
   const { data, isFetching } = useQuery({
     queryKey: ["dashboard", "statistic", period],
@@ -39,32 +41,43 @@ export function StatisticCard({ initial }: StatisticCardProps) {
   });
 
   const statistic = data ?? initial;
+  const localizedSegments = statistic.segments.map((segment) => ({
+    ...segment,
+    label:
+      segment.id === "bills"
+        ? messages.dashboard.segmentBills
+        : segment.id === "money"
+          ? messages.dashboard.segmentTransfers
+          : segment.label,
+  }));
 
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-foreground text-[15px] font-semibold">Estatísticas</h2>
+          <h2 className="text-foreground text-[15px] font-semibold">
+            {messages.dashboard.statistics}
+          </h2>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label="Como este gráfico é calculado"
+                aria-label={messages.dashboard.statisticsTooltip}
                 className="text-subtle-foreground hover:text-muted-foreground transition-colors"
               >
                 <HelpCircle className="size-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>Proporção entre tarifas e transferências no período</TooltipContent>
+            <TooltipContent>{messages.dashboard.statisticsTooltip}</TooltipContent>
           </Tooltip>
         </div>
 
         <Select value={period} onValueChange={(value) => setPeriod(value as Period)}>
-          <SelectTrigger aria-label="Período das estatísticas">
+          <SelectTrigger aria-label={messages.dashboard.statistics}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {PERIODS.map((option) => (
+            {periods.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
@@ -76,15 +89,15 @@ export function StatisticCard({ initial }: StatisticCardProps) {
       <div className="my-6 flex justify-center">
         <div className={cn("transition-opacity", isFetching && "opacity-50")}>
           <DonutChart
-            segments={statistic.segments}
+            segments={localizedSegments}
             total={statistic.total}
-            label={statistic.label}
+            label={messages.dashboard.spendingBadge}
             currency={statistic.currency}
           />
         </div>
       </div>
 
-      <ChartLegend segments={statistic.segments} />
+      <ChartLegend segments={localizedSegments} />
     </Card>
   );
 }

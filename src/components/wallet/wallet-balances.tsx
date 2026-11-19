@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowDownLeft, ArrowUpRight, Lock, RefreshCw, ShieldAlert } from "lucide-react";
+import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CurrencyBadge } from "@/components/wallet/currency-badge";
@@ -34,6 +35,8 @@ export function WalletBalances({
   onQuickWithdraw,
   onRefresh,
 }: WalletBalancesProps) {
+  const { messages } = useI18n();
+  const mw = messages.wallet;
   const blockedSet = new Set(balanceData?.blocked_currencies ?? []);
 
   return (
@@ -41,11 +44,11 @@ export function WalletBalances({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-foreground text-base font-semibold tracking-tight">
-            Sua Carteira Multi-moeda & Redes Cripto
+            {mw.balancesTitle}
           </h2>
           <p className="text-muted-foreground text-xs">
-            Saldo individual da sua conta (disponível vs. bloqueado em saque/MED)
-            {balanceData?.kycLevel !== undefined ? ` · KYC Nível ${balanceData.kycLevel}/3` : ""}.
+            {mw.balancesSubtitle}
+            {balanceData?.kycLevel !== undefined ? ` · ${mw.kycLevelLabel} ${balanceData.kycLevel}/3` : ""}.
           </p>
         </div>
 
@@ -53,7 +56,7 @@ export function WalletBalances({
           {balanceData?.isSandbox ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-medium text-amber-300">
               <span className="size-1.5 rounded-full bg-amber-400" />
-              Modo Sandbox XPag
+              {mw.sandboxBadge}
             </span>
           ) : null}
 
@@ -65,7 +68,7 @@ export function WalletBalances({
             disabled={loading}
           >
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-            Atualizar
+            {mw.refresh}
           </Button>
         </div>
       </div>
@@ -104,23 +107,23 @@ export function WalletBalances({
                     className="inline-flex items-center gap-1 rounded-full border border-red-400/30 bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-300"
                   >
                     <ShieldAlert className="size-3" />
-                    Bloqueada
+                    {mw.blockedBadge}
                   </span>
                 ) : null}
               </div>
 
               <div className="mt-4 space-y-1">
-                <p className="text-muted-foreground text-[11px]">Disponível</p>
+                <p className="text-muted-foreground text-[11px]">{mw.availableLabel}</p>
                 <p className="text-foreground truncate font-mono text-lg font-semibold tracking-tight tabular-nums">
                   {loading && !balanceData
-                    ? "Carregando..."
+                    ? "..."
                     : formatCurrencyAmount(available, code)}
                 </p>
 
                 {blocked > 0 ? (
                   <p className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-300">
                     <Lock className="size-3" />
-                    Bloqueado MED: {formatCurrencyAmount(blocked, code)}
+                    {mw.blockedLabel}: {formatCurrencyAmount(blocked, code)}
                   </p>
                 ) : (
                   <p className="text-muted-foreground truncate text-[11px]">
@@ -141,7 +144,7 @@ export function WalletBalances({
                   }}
                 >
                   <ArrowDownLeft className="size-3 text-emerald-400" />
-                  Depositar
+                  {mw.depositBtn}
                 </Button>
                 <Button
                   type="button"
@@ -154,7 +157,7 @@ export function WalletBalances({
                   }}
                 >
                   <ArrowUpRight className="size-3 text-amber-300" />
-                  Sacar
+                  {mw.withdrawBtn}
                 </Button>
               </div>
             </Card>

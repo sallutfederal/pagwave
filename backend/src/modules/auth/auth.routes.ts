@@ -182,16 +182,26 @@ export async function authRoutes(app: FastifyInstance) {
   // ─── GET /auth/me ──────────────────────────────────────────────────────
   app.get("/me", { preHandler: [authGuard] }, async (request, reply) => {
     const user = request.user as { id: string; email: string; role: string };
-    // Re-fetch full profile from DB
-    const { prisma } = await import("../../config/database.js");
-    const fullUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: { profile: true },
-    });
+    const [fullUser, localeLog] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        include: { profile: true },
+      }),
+      prisma.auditLog.findFirst({
+        where: { userId: user.id, action: "SETTINGS_UPDATE", resource: "locale" },
+        orderBy: { createdAt: "desc" },
+        select: { details: true },
+      }),
+    ]);
 
     if (!fullUser) {
       return reply.status(404).send({ error: "User not found" });
     }
+
+    const rawLocale =
+      localeLog?.details && typeof (localeLog.details as Record<string, unknown>).locale === "string"
+        ? String((localeLog.details as Record<string, unknown>).locale)
+        : "pt";
 
     reply.send({
       id: fullUser.id,
@@ -201,8 +211,31 @@ export async function authRoutes(app: FastifyInstance) {
       accountType: fullUser.accountType,
       emailVerified: fullUser.emailVerified,
       twoFactorEnabled: fullUser.twoFactorEnabled,
+      locale: rawLocale,
       profile: fullUser.profile,
     });
+  });
+
+  // ─── PATCH /auth/locale ────────────────────────────────────────────────
+  app.patch("/locale", { preHandler: [authGuard] }, async (request, reply) => {
+    const user = request.user as { id: string };
+    const body = z
+      .object({
+        locale: z.enum(["pt", "en", "es", "ar", "fr", "de"]),
+      })
+      .parse(request.body);
+
+    await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        action: "SETTINGS_UPDATE",
+        resource: "locale",
+        resourceId: user.id,
+        details: { locale: body.locale },
+      },
+    });
+
+    reply.send({ ok: true, locale: body.locale });
   });
 
   // ─── POST /auth/2fa/setup ─────────────────────────────────────────────

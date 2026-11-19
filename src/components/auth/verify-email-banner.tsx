@@ -3,6 +3,7 @@
 import { MailWarning } from "lucide-react";
 import { useState } from "react";
 
+import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 
 type State = "idle" | "sending" | "sent" | "error";
@@ -10,6 +11,7 @@ type State = "idle" | "sending" | "sent" | "error";
 /** Shown until the e-mail address is confirmed. */
 export function VerifyEmailBanner({ email }: { email: string }) {
   const [state, setState] = useState<State>("idle");
+  const { messages } = useI18n();
 
   async function resend() {
     setState("sending");
@@ -30,19 +32,22 @@ export function VerifyEmailBanner({ email }: { email: string }) {
       <MailWarning className="text-accent size-4 shrink-0" />
       <p className="min-w-0 flex-1">
         {state === "sent" ? (
-          <>A new confirmation link is on its way to <strong>{email}</strong>.</>
+          <>
+            {messages.verifyBanner.sent} <strong>({email})</strong>
+          </>
         ) : state === "error" ? (
-          "We could not send the e-mail right now. Try again in a minute."
+          messages.verifyBanner.error
         ) : (
-          <>Confirm <strong>{email}</strong> to secure your account — we sent you a link when you signed up.</>
+          <>
+            {messages.verifyBanner.text} <strong>({email})</strong>
+          </>
         )}
       </p>
       {state !== "sent" ? (
         <Button variant="outline" size="sm" onClick={resend} disabled={state === "sending"}>
-          {state === "sending" ? "Sending…" : "Resend link"}
+          {state === "sending" ? messages.verifyBanner.sending : messages.verifyBanner.resend}
         </Button>
       ) : null}
     </div>
   );
 }
-

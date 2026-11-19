@@ -4,7 +4,9 @@ import { connection } from "next/server";
 import { VerifyEmailBanner } from "@/components/auth/verify-email-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
+import { LocaleProvider } from "@/components/locale-provider";
 import { SessionProvider } from "@/components/session-provider";
+import { isRtlLocale } from "@/lib/i18n";
 import { getCurrentUser } from "@/server/auth";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -20,17 +22,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 async function AppShell({ children }: { children: React.ReactNode }) {
   await connection();
   const user = await getCurrentUser();
+  const dir = isRtlLocale(user.locale) ? "rtl" : "ltr";
 
   return (
     <SessionProvider user={user}>
-      <div className="bg-background app-atmosphere relative min-h-dvh">
-        <Sidebar />
-        <div className="relative z-10 md:pl-[220px]">
-          <Topbar />
-          {user.emailVerified ? null : <VerifyEmailBanner email={user.email} />}
-          <main className="px-4 pt-4 pb-28 sm:px-6 md:px-8 md:pb-12">{children}</main>
+      <LocaleProvider key={user.id} initialLocale={user.locale}>
+        <div className="bg-background app-atmosphere relative min-h-dvh">
+          <Sidebar />
+          <div dir={dir} className="relative z-10 md:pl-[220px]">
+            <Topbar />
+            {user.emailVerified ? null : <VerifyEmailBanner email={user.email} />}
+            <main className="px-4 pt-4 pb-28 sm:px-6 md:px-8 md:pb-12">{children}</main>
+          </div>
         </div>
-      </div>
+      </LocaleProvider>
     </SessionProvider>
   );
 }

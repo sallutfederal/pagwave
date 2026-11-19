@@ -8,6 +8,8 @@ import { SectionHeader } from "@/components/dashboard/section-header";
 import { StatisticCard } from "@/components/dashboard/statistic-card";
 import { TransactionsList } from "@/components/dashboard/transactions-list";
 import { WalletsStrip } from "@/components/dashboard/wallets-strip";
+import { getMessages } from "@/lib/i18n";
+import { getCurrentUser } from "@/server/auth";
 import {
   getDashboardSummary,
   getRecentSales,
@@ -29,26 +31,37 @@ export default function DashboardPage() {
 }
 
 async function Dashboard() {
-  const summary = await getDashboardSummary();
-  const [{ sales }, { transactions }, statistic, { wallets }] = await Promise.all([
-    getRecentSales(),
-    getTransactions(5),
-    getStatistic("this-month"),
-    getWallets(),
-  ]);
+  const [user, summary, { sales }, { transactions }, statistic, { wallets }] =
+    await Promise.all([
+      getCurrentUser(),
+      getDashboardSummary(),
+      getRecentSales(),
+      getTransactions(5),
+      getStatistic("this-month"),
+      getWallets(),
+    ]);
+  const msg = getMessages(user.locale);
 
   return (
     <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
       <div className="space-y-7 xl:col-span-8">
         <section className="space-y-5">
-          <SectionHeader title="Carteiras" actionLabel="Gerenciar" actionHref="/wallet" />
+          <SectionHeader
+            title={msg.dashboard.walletsTitle}
+            actionLabel={msg.dashboard.manage}
+            actionHref="/wallet"
+          />
           <WalletsStrip wallets={wallets} />
         </section>
 
         <QuickActions actions={summary.quickActions} />
 
         <section className="space-y-2">
-          <SectionHeader title="Entradas recentes" actionHref="/transactions" />
+          <SectionHeader
+            title={msg.dashboard.recentEntries}
+            actionLabel={msg.dashboard.seeAll}
+            actionHref="/transactions"
+          />
           <RecentSales sales={sales} />
         </section>
       </div>
@@ -56,7 +69,11 @@ async function Dashboard() {
       <div className="space-y-6 xl:col-span-4">
         <StatisticCard initial={statistic} />
         <section className="space-y-3">
-          <SectionHeader title="Transações recentes" actionHref="/transactions" />
+          <SectionHeader
+            title={msg.dashboard.recentTransactions}
+            actionLabel={msg.dashboard.seeAll}
+            actionHref="/transactions"
+          />
           <TransactionsList transactions={transactions} />
         </section>
       </div>

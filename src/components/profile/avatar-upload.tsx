@@ -5,6 +5,7 @@ import { useRef, useState, type DragEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { useI18n } from "@/components/locale-provider";
 import { UserAvatar } from "@/components/profile/user-avatar";
 import { useSession } from "@/components/session-provider";
 import { saveAvatar, useProfile } from "@/lib/profile-store";
@@ -37,6 +38,7 @@ async function toSquareDataUrl(file: File, size = OUTPUT_SIZE): Promise<string> 
 export function AvatarUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { id: userId } = useSession();
+  const { messages } = useI18n();
   const { avatar: savedAvatar } = useProfile();
   const [preview, setPreview] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -48,12 +50,12 @@ export function AvatarUpload() {
     setError(null);
 
     if (!ACCEPTED.includes(file.type)) {
-      setError("Use uma imagem PNG, JPEG, WebP ou AVIF.");
+      setError(messages.avatar.errType);
       return;
     }
 
     if (file.size > MAX_BYTES) {
-      setError("A imagem deve ter menos de 5 MB.");
+      setError(messages.avatar.errSize);
       return;
     }
 
@@ -62,7 +64,7 @@ export function AvatarUpload() {
       setPreview(dataUrl);
       saveAvatar(userId, dataUrl);
     } catch {
-      setError("Não foi possível ler essa imagem. Tente outro arquivo.");
+      setError(messages.avatar.errRead);
     }
   }
 
@@ -82,9 +84,9 @@ export function AvatarUpload() {
 
   return (
     <Card className="p-5">
-      <h2 className="text-foreground text-[15px] font-semibold">Foto de perfil</h2>
+      <h2 className="text-foreground text-[15px] font-semibold">{messages.avatar.title}</h2>
       <p className="text-muted-foreground mt-1 mb-5 text-xs">
-        Exibida localmente no seu perfil neste navegador. Recortes quadrados ficam melhores.
+        {messages.avatar.subtitle}
       </p>
 
       <div className="flex flex-wrap items-center gap-5">
@@ -97,7 +99,7 @@ export function AvatarUpload() {
           }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
-          aria-label="Alterar foto de perfil"
+          aria-label={messages.avatar.ariaChange}
           className={cn(
             "group relative grid size-28 shrink-0 place-items-center rounded-full ring-2 transition",
             dragging ? "ring-accent" : "ring-transparent hover:ring-accent/40",
@@ -123,18 +125,16 @@ export function AvatarUpload() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
-              <Upload /> Enviar foto
+              <Upload /> {messages.avatar.upload}
             </Button>
             {current ? (
               <Button variant="ghost" size="sm" onClick={removePhoto}>
-                <Trash2 /> Remover
+                <Trash2 /> {messages.avatar.remove}
               </Button>
             ) : null}
           </div>
 
-          <p className="text-muted-foreground text-[11px]">
-            PNG, JPEG, WebP ou AVIF · até 5 MB · redimensionada para 256×256.
-          </p>
+          <p className="text-muted-foreground text-[11px]">{messages.avatar.hint}</p>
 
           {error ? (
             <p role="alert" className="text-danger text-[11px]">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, RefreshCw, Send, ShieldCheck } from "lucide-react";
 
+import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,9 @@ export function P2PTransferPanel({
   onSelectCurrency,
   onSuccessRefresh,
 }: P2PTransferPanelProps) {
+  const { messages } = useI18n();
+  const mw = messages.wallet;
+
   const [recipientEmail, setRecipientEmail] = useState("");
   const [amountInput, setAmountInput] = useState("");
   const [description, setDescription] = useState("");
@@ -63,25 +67,23 @@ export function P2PTransferPanel({
 
     const email = recipientEmail.trim().toLowerCase();
     if (!email || !email.includes("@")) {
-      setErrorMsg("Informe o e-mail da conta PagWave destinatária.");
+      setErrorMsg(mw.p2pEmail);
       return;
     }
 
     const numAmount = Number(amountInput.replace(",", "."));
     if (!Number.isFinite(numAmount) || numAmount <= 0) {
-      setErrorMsg("Informe um valor numérico válido maior que zero.");
+      setErrorMsg("Invalid amount.");
       return;
     }
 
     if (selectedCurrency === "CLP" && !Number.isInteger(numAmount)) {
-      setErrorMsg("CLP exige valor inteiro sem casas decimais.");
+      setErrorMsg("CLP requires integer amount.");
       return;
     }
 
     if (numAmount > available) {
-      setErrorMsg(
-        `Saldo disponível insuficiente em ${selectedCurrency} (disponível: ${formatCurrencyAmount(available, selectedCurrency)}).`,
-      );
+      setErrorMsg(`${selectedCurrency}: ${mw.p2pAvailable} ${formatCurrencyAmount(available, selectedCurrency)}`);
       return;
     }
 
@@ -105,7 +107,7 @@ export function P2PTransferPanel({
       } | null;
 
       if (!res.ok || !json?.ok || !json.transfer) {
-        setErrorMsg(json?.message || "Não foi possível concluir a transferência.");
+        setErrorMsg(json?.message || "Transfer failed.");
         return;
       }
 
@@ -114,7 +116,7 @@ export function P2PTransferPanel({
       setDescription("");
       onSuccessRefresh();
     } catch {
-      setErrorMsg("Erro de rede ao processar a transferência entre contas.");
+      setErrorMsg("Network error.");
     } finally {
       setSubmitting(false);
     }
@@ -125,12 +127,8 @@ export function P2PTransferPanel({
       <Card className="space-y-5 p-6 xl:col-span-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-foreground text-base font-semibold">
-              Transferir para Usuário PagWave
-            </h3>
-            <p className="text-muted-foreground text-xs">
-              Envie saldo instantaneamente para outra conta PagWave pelo e-mail, sem passar por saque externo.
-            </p>
+            <h3 className="text-foreground text-base font-semibold">{mw.p2pTitle}</h3>
+            <p className="text-muted-foreground text-xs">{mw.p2pDesc}</p>
           </div>
           <CurrencyBadge currency={selectedCurrency} />
         </div>
@@ -139,7 +137,7 @@ export function P2PTransferPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                Moeda do saldo
+                {mw.p2pCurrency}
               </label>
               <Select
                 value={selectedCurrency}
@@ -157,7 +155,7 @@ export function P2PTransferPanel({
                     const bal = balanceData?.balances?.[code]?.available ?? 0;
                     return (
                       <SelectItem key={code} value={code}>
-                        {code} — Disponível: {formatCurrencyAmount(bal, code)}
+                        {code} — {mw.availableLabel}: {formatCurrencyAmount(bal, code)}
                       </SelectItem>
                     );
                   })}
@@ -168,21 +166,21 @@ export function P2PTransferPanel({
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <label className="text-muted-foreground block text-xs font-medium">
-                  Valor ({selectedCurrency})
+                  {mw.p2pAmount} ({selectedCurrency})
                 </label>
                 <button
                   type="button"
                   onClick={() => available > 0 && setAmountInput(String(available))}
                   className="text-accent text-[11px] font-medium hover:underline"
                 >
-                  Saldo: {formatCurrencyAmount(available, selectedCurrency)}
+                  {mw.p2pAvailable}: {formatCurrencyAmount(available, selectedCurrency)}
                 </button>
               </div>
               <Input
                 type="number"
                 step={spec.integerOnly ? "1" : "any"}
                 min="0"
-                placeholder={spec.integerOnly ? "Ex.: 25000" : "Ex.: 50.00"}
+                placeholder={spec.integerOnly ? "25000" : "50.00"}
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
                 required
@@ -193,11 +191,11 @@ export function P2PTransferPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                E-mail da conta PagWave destinatária
+                {mw.p2pEmail}
               </label>
               <Input
                 type="email"
-                placeholder="amigo@dominio.com"
+                placeholder="email@pagwave.com"
                 value={recipientEmail}
                 onChange={(e) => setRecipientEmail(e.target.value)}
                 required
@@ -206,12 +204,12 @@ export function P2PTransferPanel({
 
             <div>
               <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                Observação (opcional)
+                {mw.p2pNote}
               </label>
               <Input
                 type="text"
                 maxLength={140}
-                placeholder="Ex.: Acerto semanal"
+                placeholder={mw.p2pNotePlaceholder}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -225,16 +223,14 @@ export function P2PTransferPanel({
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <p className="text-muted-foreground text-[11px]">
-              Liquidação atômica imediata no ledger PagWave entre as duas contas.
-            </p>
+            <p className="text-muted-foreground text-[11px]">{mw.p2pFooterHint}</p>
             <Button type="submit" disabled={submitting}>
               {submitting ? (
                 <RefreshCw className="size-4 animate-spin" />
               ) : (
                 <Send className="size-4" />
               )}
-              {submitting ? "Transferindo..." : "Transferir saldo"}
+              {submitting ? mw.p2pSubmitting : mw.p2pSubmit}
             </Button>
           </div>
         </form>
@@ -245,21 +241,21 @@ export function P2PTransferPanel({
           <Card className="space-y-3 border-emerald-400/30 bg-emerald-500/10 p-5">
             <div className="flex items-center gap-2 text-emerald-300">
               <CheckCircle2 className="size-4" />
-              <p className="text-sm font-semibold">Transferência concluída</p>
+              <p className="text-sm font-semibold">{mw.p2pSuccessTitle}</p>
             </div>
             <div className="space-y-1.5 text-xs">
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Referência</span>
+                <span className="text-muted-foreground">{mw.p2pReference}</span>
                 <span className="text-foreground font-mono">{receipt.referenceId}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Destinatário</span>
+                <span className="text-muted-foreground">{mw.p2pRecipient}</span>
                 <span className="text-foreground text-right font-medium">
                   {receipt.recipientName} ({receipt.recipientEmail})
                 </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-muted-foreground">Valor creditado</span>
+                <span className="text-muted-foreground">{mw.p2pCredited}</span>
                 <span className="font-mono font-semibold text-emerald-300">
                   {receipt.netAmount} {receipt.currencyCode}
                 </span>
@@ -271,12 +267,12 @@ export function P2PTransferPanel({
         <Card className="space-y-2.5 p-5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-accent size-4" />
-            <h4 className="text-foreground text-sm font-semibold">Como funciona entre usuários</h4>
+            <h4 className="text-foreground text-sm font-semibold">{mw.p2pHowTitle}</h4>
           </div>
           <ul className="text-muted-foreground space-y-1.5 text-xs">
-            <li>• Débito e crédito ocorrem na mesma transação do PostgreSQL, na hora.</li>
-            <li>• Se o destinatário ainda não tiver carteira nessa moeda, ela é aberta automaticamente.</li>
-            <li>• Os dois participantes passam a ver a movimentação em Extrato &amp; Transações.</li>
+            <li>• {mw.p2pHow1}</li>
+            <li>• {mw.p2pHow2}</li>
+            <li>• {mw.p2pHow3}</li>
           </ul>
         </Card>
       </div>

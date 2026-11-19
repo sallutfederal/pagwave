@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/layout/page-header";
+import { LocalizedPageHeader } from "@/components/layout/localized-page-header";
 import { AdminIntegrationsView } from "@/components/admin/admin-integrations-view";
 
 export const metadata: Metadata = {
@@ -9,12 +9,8 @@ export const metadata: Metadata = {
 export default function AdminIntegrationsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Admin · API Keys & Webhooks"
-        description="Supervisão global das credenciais de API dos clientes, revogação emergencial, tráfego /api/v1/* e webhooks."
-      />
+      <LocalizedPageHeader section="adminIntegrations" />
       <AdminIntegrationsView />
     </div>
   );
 }
-

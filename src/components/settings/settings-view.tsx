@@ -20,6 +20,7 @@ import {
 import { useTheme } from "next-themes";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { useI18n } from "@/components/locale-provider";
 import { AvatarUpload } from "@/components/profile/avatar-upload";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,7 @@ function SettingsCard({
 export function SettingsView() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
+  const { locale, messages, modules, setLocale } = useI18n();
   const hydrated = useHydrated();
   const user = useSession();
 
@@ -273,12 +275,12 @@ export function SettingsView() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Configurações"
-        description="Perfil, verificação KYC, aparência, notificações e segurança desta conta."
+        title={messages.pages.settingsTitle}
+        description={messages.pages.settingsDesc}
         actions={
           <Button type="button" disabled={savingProfile} onClick={() => void saveProfileAndPrefs()}>
             <Save className="size-4" />
-            {savingProfile ? "Salvando..." : "Salvar alterações"}
+            {savingProfile ? "..." : modules.settings.saveProfileBtn}
           </Button>
         }
       />
@@ -300,8 +302,8 @@ export function SettingsView() {
           <AvatarUpload />
 
           <SettingsCard
-            title="Perfil & Dados Cadastrais"
-            description="Edite o nome exibido, telefone e dados empresariais salvos na sua conta."
+            title={modules.settings.profileTitle}
+            description={messages.pages.settingsDesc}
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="space-y-1.5">
@@ -352,8 +354,8 @@ export function SettingsView() {
           </SettingsCard>
 
           <SettingsCard
-            title="Verificação de Identidade (KYC)"
-            description={`Status atual: ${kycStatus} · Nível ${kycLevel}/3. Envie documentos para desbloquear limites maiores.`}
+            title={modules.settings.kycTitle}
+            description={`Status: ${kycStatus} · ${kycLevel}/3`}
           >
             <form onSubmit={handleSubmitKyc} className="space-y-3.5">
               <div className="grid gap-3 sm:grid-cols-3">
@@ -562,7 +564,36 @@ export function SettingsView() {
             </div>
           </SettingsCard>
 
-          <SettingsCard title="Segurança & 2FA" description="Proteja o acesso ao seu saldo e API.">
+          <SettingsCard
+            title={`${messages.topbar.languageLabel} (${locale.toUpperCase()})`}
+            description={messages.topbar.selectLanguage}
+          >
+            <div className="flex flex-wrap gap-2">
+              {(["pt", "en", "es", "ar", "fr", "de"] as const).map((code) => (
+                <Button
+                  key={code}
+                  type="button"
+                  size="sm"
+                  variant={locale === code ? "default" : "outline"}
+                  onClick={() => void setLocale(code)}
+                >
+                  {code === "pt"
+                    ? "Português"
+                    : code === "en"
+                      ? "English"
+                      : code === "es"
+                        ? "Español"
+                        : code === "ar"
+                          ? "العربية"
+                          : code === "fr"
+                            ? "Français"
+                            : "Deutsch"}
+                </Button>
+              ))}
+            </div>
+          </SettingsCard>
+
+          <SettingsCard title={modules.settings.securityTitle} description="2FA · Passwords · Sessions">
             {securityMsg ? (
               <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
                 <CheckCircle2 className="size-4 shrink-0" />

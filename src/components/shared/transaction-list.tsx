@@ -1,15 +1,13 @@
-import { Avatar } from "@/components/ui/avatar";
-import { Card } from "@/components/ui/card";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { statusTone } from "@/lib/status";
-import type { Transaction } from "@/lib/schemas";
-import { Badge } from "@/components/ui/badge";
+"use client";
 
-const STATUS_LABEL: Record<Transaction["status"], string> = {
-  Completed: "Concluída",
-  Pending: "Pendente",
-  Failed: "Falhou",
-};
+import { useI18n } from "@/components/locale-provider";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/format";
+import { formatLocaleDate } from "@/lib/i18n";
+import type { Transaction } from "@/lib/schemas";
+import { statusTone } from "@/lib/status";
 
 export function TransactionListItem({
   transaction,
@@ -18,6 +16,8 @@ export function TransactionListItem({
   transaction: Transaction;
   showDate?: boolean;
 }) {
+  const { locale, messages } = useI18n();
+
   return (
     <Card className="flex items-center gap-3 p-4 transition-all duration-200 hover:-translate-y-[1px] hover:border-foreground/20">
       <Avatar data={transaction.avatar} name={transaction.title} size="sm" />
@@ -26,7 +26,7 @@ export function TransactionListItem({
           <p className="text-foreground truncate text-[13px] font-medium">{transaction.title}</p>
           {showDate ? (
             <span className="text-subtle-foreground shrink-0 text-[11px]">
-              {formatDate(transaction.date)}
+              {formatLocaleDate(transaction.date, locale)}
             </span>
           ) : null}
         </div>
@@ -47,7 +47,7 @@ export function TransactionListItem({
           )}
         </span>
         <Badge tone={statusTone(transaction.status)} className="px-2 py-0.5 text-[10px]">
-          {STATUS_LABEL[transaction.status]}
+          {messages.status[transaction.status]}
         </Badge>
       </div>
     </Card>
@@ -55,10 +55,12 @@ export function TransactionListItem({
 }
 
 export function TransactionsList({ transactions }: { transactions: Transaction[] }) {
+  const { messages } = useI18n();
+
   if (transactions.length === 0) {
     return (
       <Card className="text-muted-foreground p-6 text-center text-xs">
-        Nenhuma movimentação registrada ainda. Depósitos, saques e transferências P2P aparecerão aqui.
+        {messages.dashboard.recentTransactionsEmpty}
       </Card>
     );
   }

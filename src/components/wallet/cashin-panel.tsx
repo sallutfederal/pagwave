@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useI18n } from "@/components/locale-provider";
 import {
   ArrowDownLeft,
   Check,
@@ -77,6 +78,8 @@ export function CashinPanel({
   onSelectCurrency,
   onSuccessRefresh,
 }: CashinPanelProps) {
+  const { modules } = useI18n();
+  const mc = modules.cashin;
   const spec = CURRENCY_SPECS[selectedCurrency];
   const [method, setMethod] = useState<string>(spec.cashinMethods[0]?.id ?? "");
   const [mode, setMode] = useState<"dynamic" | "static">("dynamic");
@@ -241,12 +244,10 @@ export function CashinPanel({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div>
               <h3 className="text-foreground text-base font-semibold">
-                {isSelfDeposit ? "Depositar na minha conta" : "Cobrar terceiro (Cash-in)"}
+                {isSelfDeposit ? mc.depositTitle : mc.chargeTitle}
               </h3>
               <p className="text-muted-foreground text-xs">
-                {isSelfDeposit
-                  ? "Gere um Pix ou depósito local para adicionar e guardar saldo na sua carteira."
-                  : "Gere cobrança dinâmica ou estática para clientes em BRL, MXN, COP, ARS, CLP ou cripto."}
+                {isSelfDeposit ? mc.depositSubtitle : mc.chargeSubtitle}
               </p>
             </div>
             <CurrencyBadge currency={selectedCurrency} />
@@ -267,7 +268,7 @@ export function CashinPanel({
               )}
             >
               <PiggyBank className="size-3.5" />
-              Depositar na minha conta
+              {mc.purposeSelf}
             </button>
             <button
               type="button"
@@ -280,7 +281,7 @@ export function CashinPanel({
               )}
             >
               <Receipt className="size-3.5" />
-              Cobrar terceiro
+              {mc.purposeCharge}
             </button>
           </div>
 

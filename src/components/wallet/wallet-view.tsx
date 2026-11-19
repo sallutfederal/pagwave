@@ -10,6 +10,7 @@ import {
   KeyRound,
   Send,
 } from "lucide-react";
+import { useI18n } from "@/components/locale-provider";
 import { BeneficiariesPanel } from "@/components/wallet/beneficiaries-panel";
 import { CashinPanel } from "@/components/wallet/cashin-panel";
 import { CashoutPanel } from "@/components/wallet/cashout-panel";
@@ -53,12 +54,33 @@ const VALID_TABS = new Set<WalletTab>([
 ]);
 
 export function WalletView() {
+  const { messages } = useI18n();
+  const mw = messages.wallet;
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab") as WalletTab | null;
   const [activeTab, setActiveTab] = useState<WalletTab>(() =>
     requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : "cashout",
   );
   const [cashinIntent, setCashinIntent] = useState<CashinIntent>("self_deposit");
+
+  const localizedTabLabel = (id: WalletTab, fallback: string) => {
+    switch (id) {
+      case "cashout":
+        return mw.tabCashout;
+      case "cashin":
+        return mw.tabCashin;
+      case "transfer":
+        return mw.tabTransfer;
+      case "beneficiaries":
+        return mw.tabBeneficiaries;
+      case "convert":
+        return mw.tabConvert;
+      case "history":
+        return mw.tabHistory;
+      default:
+        return fallback;
+    }
+  };
   const [selectedCurrency, setSelectedCurrency] = useState<XPagCurrency>("BRL");
   const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(
     null,
@@ -177,7 +199,7 @@ export function WalletView() {
               )}
             >
               <Icon className="size-3.5" />
-              {tab.label}
+              {localizedTabLabel(tab.id, tab.label)}
             </button>
           );
         })}

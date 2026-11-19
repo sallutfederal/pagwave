@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useI18n } from "@/components/locale-provider";
 import {
   ArrowUpRight,
   Check,
@@ -44,6 +45,8 @@ export function BeneficiariesPanel({
   onChanged,
   onWithdrawWithBeneficiary,
 }: BeneficiariesPanelProps) {
+  const { modules } = useI18n();
+  const mb = modules.beneficiaries;
   const [filterKind, setFilterKind] = useState<"all" | "fiat" | "crypto">("all");
   const [showForm, setShowForm] = useState(false);
 
@@ -209,10 +212,10 @@ export function BeneficiariesPanel({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
               <div>
                 <h3 className="text-foreground text-sm font-semibold">
-                  Cadastrar Chave Bancária / Endereço Cripto
+                  {mb.formTitle}
                 </h3>
                 <p className="text-muted-foreground text-xs">
-                  Os campos e validações seguem automaticamente o país ou rede exigida pela XPag.
+                  {mb.listTitle}
                 </p>
               </div>
               {spec.cryptoNetwork ? (

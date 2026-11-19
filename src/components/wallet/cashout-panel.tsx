@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ArrowUpRight, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
+import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,8 @@ export function CashoutPanel({
   onSelectCurrency,
   onSuccessRefresh,
 }: CashoutPanelProps) {
+  const { modules } = useI18n();
+  const mco = modules.cashout;
   const [sourceMode, setSourceMode] = useState<"saved" | "adhoc">(
     preselectedBeneficiaryId || beneficiaries.length > 0 ? "saved" : "adhoc",
   );
@@ -191,10 +194,10 @@ export function CashoutPanel({
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div>
               <h3 className="text-foreground text-base font-semibold">
-                Solicitar Saque Multi-país / Cripto
+                {mco.title}
               </h3>
               <p className="text-muted-foreground text-xs">
-                Envie via chave cadastrada ou informe um destino na hora para qualquer moeda suportada.
+                {mco.subtitle}
               </p>
             </div>
 
@@ -209,7 +212,7 @@ export function CashoutPanel({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Chave salva ({savedForCurrency.length})
+                {mco.sourceSaved} ({savedForCurrency.length})
               </button>
               <button
                 type="button"
@@ -221,7 +224,7 @@ export function CashoutPanel({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                Novo destino
+                {mco.sourceAdhoc}
               </button>
             </div>
           </div>

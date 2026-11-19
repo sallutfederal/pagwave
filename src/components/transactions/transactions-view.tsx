@@ -19,6 +19,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { useI18n } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -37,50 +38,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
+import {
+  formatLocaleDate,
+  formatLocaleDateTime,
+  translateCategory,
+} from "@/lib/i18n";
 import type { Transaction } from "@/lib/schemas";
 import { statusTone } from "@/lib/status";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";
 const PAGE_SIZE = 15;
-
-const STATUS_LABEL: Record<Transaction["status"], string> = {
-  Completed: "Concluída",
-  Pending: "Pendente",
-  Failed: "Falhou",
-};
-
-const CATEGORY_LABEL: Record<string, string> = {
-  Deposit: "Depósito",
-  Withdrawal: "Saque",
-  "Transfer received": "Transferência recebida",
-  "Transfer sent": "Transferência enviada",
-  Exchange: "Conversão FX",
-  "Card payment": "Pagamento com cartão",
-  "Card refund": "Estorno de cartão",
-  Fee: "Tarifa",
-  Interest: "Rendimento",
-  Airdrop: "Airdrop",
-  "Staking reward": "Recompensa",
-};
-
-function formatDatePt(iso: string): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(iso));
-}
-
-function formatDateTimePt(iso: string): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-}
 
 function escapeCsvCell(value: unknown): string {
   const raw = String(value ?? "");
@@ -153,6 +121,9 @@ export function TransactionsView({
 }: {
   initialTransactions: Transaction[];
 }) {
+  const { locale, messages } = useI18n();
+  const mt = messages.transactions;
+
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState("");
@@ -176,13 +147,13 @@ export function TransactionsView({
       if (currencyFilter !== ALL && tx.currency !== currencyFilter) return false;
       if (!needle) return true;
 
-      const translatedCategory = CATEGORY_LABEL[tx.category] ?? tx.category;
+      const translatedCategory = translateCategory(tx.category, locale);
       return [tx.title, tx.subtitle, tx.category, translatedCategory, tx.method, tx.currency]
         .join(" ")
         .toLowerCase()
         .includes(needle);
     });
-  }, [transactions, query, direction, status, currencyFilter]);
+  }, [transactions, query, direction, status, currencyFilter, locale]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -191,30 +162,21 @@ export function TransactionsView({
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, safePage]);
 
-  const { totalIn, inCount, totalOut, outCount, pendingCount, netFlow } = useMemo(() => {
+  const { totalIn, totalOut, netFlow } = useMemo(() => {
     let inSum = 0;
-    let inQty = 0;
     let outSum = 0;
-    let outQty = 0;
-    let pending = 0;
 
     for (const item of filtered) {
-      if (item.status === "Pending") pending += 1;
       if (item.direction === "in") {
-        inQty += 1;
         inSum += Math.abs(item.usdAmount ?? 0);
       } else {
-        outQty += 1;
         outSum += Math.abs(item.usdAmount ?? 0);
       }
     }
 
     return {
       totalIn: inSum,
-      inCount: inQty,
       totalOut: outSum,
-      outCount: outQty,
-      pendingCount: pending,
       netFlow: inSum - outSum,
     };
   }, [filtered]);
@@ -249,28 +211,28 @@ export function TransactionsView({
 
   function handleExportCsv() {
     const header = [
-      "Data",
-      "Referencia",
-      "Descricao",
-      "Categoria",
-      "Metodo",
-      "Direcao",
-      "Moeda",
-      "Valor",
-      "Valor_USD",
-      "Status",
+      mt.colDate,
+      mt.colReference,
+      mt.colMovement,
+      mt.detailCategory,
+      mt.colMethod,
+      mt.dirIn + "/" + mt.dirOut,
+      "Currency",
+      mt.colAmount,
+      mt.detailUsdRef,
+      mt.colStatus,
     ];
     const rows = filtered.map((tx) => [
-      formatDateTimePt(tx.date),
+      formatLocaleDateTime(tx.date, locale),
       tx.subtitle,
       tx.title,
-      CATEGORY_LABEL[tx.category] ?? tx.category,
+      translateCategory(tx.category, locale),
       tx.method,
-      tx.direction === "in" ? "Entrada" : "Saida",
+      tx.direction === "in" ? mt.dirIn : mt.dirOut,
       tx.currency,
       tx.amount,
       tx.usdAmount ?? "",
-      STATUS_LABEL[tx.status] ?? tx.status,
+      messages.status[tx.status] ?? tx.status,
     ]);
 
     const csv = [header, ...rows]
@@ -281,7 +243,7 @@ export function TransactionsView({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `pagwave-transacoes-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `pagwave-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -297,8 +259,8 @@ export function TransactionsView({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Transações"
-        description="Extrato unificado de depósitos, saques, conversões e transferências da sua conta."
+        title={mt.title}
+        description={mt.subtitle}
         actions={
           <>
             <Button
@@ -309,7 +271,7 @@ export function TransactionsView({
               disabled={refreshing}
             >
               <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
-              Atualizar
+              {mt.refresh}
             </Button>
             <Button
               type="button"
@@ -319,7 +281,7 @@ export function TransactionsView({
               disabled={filtered.length === 0}
             >
               <Download className="size-3.5" />
-              Exportar CSV
+              {mt.exportCsv}
             </Button>
           </>
         }
@@ -329,37 +291,33 @@ export function TransactionsView({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile
           icon={<ArrowDownLeft className="size-5" />}
-          label="Entradas (eq. USD)"
+          label={`${mt.kpiInflow} (USD)`}
           value={formatCurrency({ amount: totalIn, currency: "USD", fractionDigits: 2 })}
-          hint={`${inCount} movimentação(ões) de entrada`}
+          hint={mt.kpiInflowHint}
           tone="in"
         />
         <SummaryTile
           icon={<ArrowUpRight className="size-5" />}
-          label="Saídas (eq. USD)"
+          label={`${mt.kpiOutflow} (USD)`}
           value={formatCurrency({ amount: totalOut, currency: "USD", fractionDigits: 2 })}
-          hint={`${outCount} movimentação(ões) de saída`}
+          hint={mt.kpiOutflowHint}
           tone="out"
         />
         <SummaryTile
           icon={<TrendingUp className="size-5" />}
-          label="Fluxo líquido (USD)"
+          label={`${mt.kpiNet} (USD)`}
           value={formatCurrency(
             { amount: netFlow, currency: "USD", fractionDigits: 2 },
             { signBeforeSymbol: true },
           )}
-          hint={netFlow >= 0 ? "Saldo positivo no filtro" : "Mais saídas que entradas"}
+          hint={mt.kpiNetHint}
           tone="net"
         />
         <SummaryTile
           icon={<Receipt className="size-5" />}
-          label="Transações listadas"
+          label={mt.kpiCount}
           value={String(filtered.length)}
-          hint={
-            pendingCount > 0
-              ? `${pendingCount} pendente(s) de confirmação`
-              : `Total de ${transactions.length} no histórico`
-          }
+          hint={`${filtered.length} ${mt.kpiCountOf} ${transactions.length}`}
           tone="neutral"
         />
       </div>
@@ -376,7 +334,7 @@ export function TransactionsView({
                 setQuery(event.target.value);
                 setPage(1);
               }}
-              placeholder="Buscar por referência TXN, descrição ou método"
+              placeholder={mt.searchPlaceholder}
               className="bg-surface-subtle border-line text-foreground h-10 rounded-full pl-10 text-xs"
             />
           </label>
@@ -384,9 +342,9 @@ export function TransactionsView({
           <div className="bg-surface-subtle border-line inline-flex items-center gap-1 rounded-full border p-1">
             {(
               [
-                { id: "all", label: "Todas" },
-                { id: "in", label: "Entradas" },
-                { id: "out", label: "Saídas" },
+                { id: "all", label: mt.dirAll },
+                { id: "in", label: mt.dirIn },
+                { id: "out", label: mt.dirOut },
               ] as const
             ).map((pill) => (
               <button
@@ -416,16 +374,16 @@ export function TransactionsView({
             }}
           >
             <SelectTrigger
-              aria-label="Filtrar por status"
-              className="bg-surface-subtle border-line h-10 w-36 rounded-full px-3.5 text-xs"
+              aria-label={mt.allStatuses}
+              className="bg-surface-subtle border-line h-10 w-40 rounded-full px-3.5 text-xs"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>Todos status</SelectItem>
-              <SelectItem value="Completed">Concluída</SelectItem>
-              <SelectItem value="Pending">Pendente</SelectItem>
-              <SelectItem value="Failed">Falhou</SelectItem>
+              <SelectItem value={ALL}>{mt.allStatuses}</SelectItem>
+              <SelectItem value="Completed">{messages.status.Completed}</SelectItem>
+              <SelectItem value="Pending">{messages.status.Pending}</SelectItem>
+              <SelectItem value="Failed">{messages.status.Failed}</SelectItem>
             </SelectContent>
           </Select>
 
@@ -437,13 +395,13 @@ export function TransactionsView({
             }}
           >
             <SelectTrigger
-              aria-label="Filtrar por moeda"
-              className="bg-surface-subtle border-line h-10 w-36 rounded-full px-3.5 text-xs"
+              aria-label={mt.allCurrencies}
+              className="bg-surface-subtle border-line h-10 w-40 rounded-full px-3.5 text-xs"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>Todas moedas</SelectItem>
+              <SelectItem value={ALL}>{mt.allCurrencies}</SelectItem>
               {availableCurrencies.map((code) => (
                 <SelectItem key={code} value={code}>
                   {code}
@@ -461,17 +419,17 @@ export function TransactionsView({
               className="h-9 rounded-full px-3 text-xs"
             >
               <X className="size-3.5" />
-              Limpar
+              {mt.clearFilters}
             </Button>
           ) : null}
         </div>
 
         <span className="text-muted-foreground text-xs tabular-nums">
-          {filtered.length} de {transactions.length}
+          {filtered.length} {mt.kpiCountOf} {transactions.length}
         </span>
       </div>
 
-      {/* Table card matching /admin/transactions & /wallet */}
+      {/* Table card */}
       <Card className="overflow-hidden p-0">
         {paginated.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-14 text-center">
@@ -480,14 +438,10 @@ export function TransactionsView({
             </span>
             <div className="space-y-1">
               <p className="text-foreground text-sm font-medium">
-                {transactions.length === 0
-                  ? "Nenhuma transação registrada ainda"
-                  : "Nenhuma transação encontrada para esses filtros"}
+                {transactions.length === 0 ? mt.emptyAllTitle : mt.emptyFilteredTitle}
               </p>
               <p className="text-muted-foreground text-xs">
-                {transactions.length === 0
-                  ? "Faça um depósito ou conversão na sua carteira para acompanhar o extrato aqui."
-                  : "Tente ajustar o termo de busca, moeda ou status selecionado."}
+                {transactions.length === 0 ? mt.emptyAllDesc : mt.emptyFilteredDesc}
               </p>
             </div>
             {transactions.length === 0 ? (
@@ -495,11 +449,11 @@ export function TransactionsView({
                 href="/wallet"
                 className={buttonVariants({ size: "sm", variant: "outline", className: "mt-1" })}
               >
-                Ir para Carteira
+                {mt.goToWallet}
               </Link>
             ) : (
               <Button type="button" size="sm" variant="outline" onClick={clearFilters}>
-                Limpar filtros
+                {mt.clearFilters}
               </Button>
             )}
           </div>
@@ -510,17 +464,17 @@ export function TransactionsView({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="text-muted-foreground border-b border-white/10 bg-white/[0.02] text-[11px] font-medium uppercase tracking-wide">
-                    <th className="px-5 py-3.5">Movimentação</th>
-                    <th className="px-4 py-3.5">Referência</th>
-                    <th className="px-4 py-3.5">Data</th>
-                    <th className="px-4 py-3.5">Método</th>
-                    <th className="px-4 py-3.5">Status</th>
-                    <th className="px-5 py-3.5 text-right">Valor</th>
+                    <th className="px-5 py-3.5">{mt.colMovement}</th>
+                    <th className="px-4 py-3.5">{mt.colReference}</th>
+                    <th className="px-4 py-3.5">{mt.colDate}</th>
+                    <th className="px-4 py-3.5">{mt.colMethod}</th>
+                    <th className="px-4 py-3.5">{mt.colStatus}</th>
+                    <th className="px-5 py-3.5 text-right">{mt.colAmount}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-line divide-y">
                   {paginated.map((tx) => {
-                    const catLabel = CATEGORY_LABEL[tx.category] ?? tx.category;
+                    const catLabel = translateCategory(tx.category, locale);
                     return (
                       <tr
                         key={tx.id}
@@ -546,7 +500,7 @@ export function TransactionsView({
                         </td>
 
                         <td className="text-muted-foreground px-4 py-3.5 whitespace-nowrap">
-                          {formatDatePt(tx.date)}
+                          {formatLocaleDate(tx.date, locale)}
                         </td>
 
                         <td className="px-4 py-3.5">
@@ -566,7 +520,7 @@ export function TransactionsView({
                                 tx.status === "Failed" && "bg-rose-400",
                               )}
                             />
-                            {STATUS_LABEL[tx.status] ?? tx.status}
+                            {messages.status[tx.status] ?? tx.status}
                           </Badge>
                         </td>
 
@@ -611,7 +565,7 @@ export function TransactionsView({
             {/* Mobile list */}
             <ul className="divide-line divide-y md:hidden">
               {paginated.map((tx) => {
-                const catLabel = CATEGORY_LABEL[tx.category] ?? tx.category;
+                const catLabel = translateCategory(tx.category, locale);
                 return (
                   <li
                     key={tx.id}
@@ -625,7 +579,7 @@ export function TransactionsView({
                           {tx.title}
                         </p>
                         <p className="text-muted-foreground truncate text-[11px]">
-                          {catLabel} · {formatDatePt(tx.date)}
+                          {catLabel} · {formatLocaleDate(tx.date, locale)}
                         </p>
                       </div>
                     </div>
@@ -648,7 +602,7 @@ export function TransactionsView({
                         )}
                       </p>
                       <Badge tone={statusTone(tx.status)} className="mt-1">
-                        {STATUS_LABEL[tx.status] ?? tx.status}
+                        {messages.status[tx.status] ?? tx.status}
                       </Badge>
                     </div>
                   </li>
@@ -659,7 +613,7 @@ export function TransactionsView({
             {totalPages > 1 ? (
               <div className="border-line flex items-center justify-between border-t px-5 py-3 text-xs">
                 <span className="text-muted-foreground tabular-nums">
-                  Página {safePage} de {totalPages}
+                  {mt.pageOf} {safePage} {mt.kpiCountOf} {totalPages}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <Button
@@ -671,7 +625,7 @@ export function TransactionsView({
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     <ChevronLeft className="size-3.5" />
-                    Anterior
+                    {mt.prev}
                   </Button>
                   <Button
                     type="button"
@@ -681,7 +635,7 @@ export function TransactionsView({
                     disabled={safePage >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    Próxima
+                    {mt.next}
                     <ChevronRight className="size-3.5" />
                   </Button>
                 </div>
@@ -701,15 +655,15 @@ export function TransactionsView({
                 <div className="min-w-0">
                   <DialogTitle className="truncate text-base">{selectedTx.title}</DialogTitle>
                   <DialogDescription>
-                    {CATEGORY_LABEL[selectedTx.category] ?? selectedTx.category} ·{" "}
-                    {formatDateTimePt(selectedTx.date)}
+                    {translateCategory(selectedTx.category, locale)} ·{" "}
+                    {formatLocaleDateTime(selectedTx.date, locale)}
                   </DialogDescription>
                 </div>
               </div>
 
               <div className="bg-surface-subtle border-line mt-5 flex items-center justify-between rounded-2xl border p-4">
                 <div>
-                  <p className="text-muted-foreground text-[11px]">Valor da movimentação</p>
+                  <p className="text-muted-foreground text-[11px]">{mt.colAmount}</p>
                   <p
                     className={cn(
                       "mt-0.5 font-mono text-2xl font-semibold tabular-nums",
@@ -728,7 +682,7 @@ export function TransactionsView({
                   </p>
                   {selectedTx.usdAmount !== null ? (
                     <p className="text-subtle-foreground mt-0.5 font-mono text-xs tabular-nums">
-                      Equivalente:{" "}
+                      {mt.detailUsdRef}:{" "}
                       {formatCurrency(
                         {
                           amount: Math.abs(selectedTx.usdAmount),
@@ -741,13 +695,13 @@ export function TransactionsView({
                   ) : null}
                 </div>
                 <Badge tone={statusTone(selectedTx.status)}>
-                  {STATUS_LABEL[selectedTx.status] ?? selectedTx.status}
+                  {messages.status[selectedTx.status] ?? selectedTx.status}
                 </Badge>
               </div>
 
               <div className="mt-4 space-y-2.5 text-xs">
                 <div className="border-line bg-surface-subtle flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5">
-                  <span className="text-muted-foreground">Referência</span>
+                  <span className="text-muted-foreground">{mt.detailReference}</span>
                   <button
                     type="button"
                     onClick={() => void copyReference(selectedTx.subtitle)}
@@ -763,16 +717,16 @@ export function TransactionsView({
                 </div>
 
                 <div className="border-line bg-surface-subtle flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5">
-                  <span className="text-muted-foreground">Moeda / Canal</span>
+                  <span className="text-muted-foreground">{mt.detailMethod}</span>
                   <span className="text-foreground font-medium">
                     {selectedTx.currency} · {selectedTx.method}
                   </span>
                 </div>
 
                 <div className="border-line bg-surface-subtle flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5">
-                  <span className="text-muted-foreground">Direção</span>
+                  <span className="text-muted-foreground">{mt.detailCategory}</span>
                   <span className="text-foreground font-medium">
-                    {selectedTx.direction === "in" ? "Entrada na carteira" : "Saída da carteira"}
+                    {translateCategory(selectedTx.category, locale)}
                   </span>
                 </div>
               </div>
