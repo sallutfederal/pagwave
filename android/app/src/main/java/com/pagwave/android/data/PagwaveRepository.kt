@@ -8,6 +8,10 @@ import java.io.IOException
 class PagwaveRepository(private val client: PagwaveApiClient) {
     private val api = client.api
 
+    fun setSessionExpiredListener(listener: () -> Unit) {
+        client.onSessionExpired = listener
+    }
+
     fun hasSavedSession(): Boolean = client.cookieJar.hasActiveSession()
 
     fun clearSession() = client.cookieJar.clear()
@@ -88,6 +92,10 @@ class PagwaveRepository(private val client: PagwaveApiClient) {
 
     suspend fun createCashin(req: CashinRequest) = guard { api.createCashin(req) }
 
+    suspend fun simulateSandboxPayment(requestNumber: String, status: String = "paid") = guard {
+        api.simulateSandbox(SandboxSimulateRequest(requestNumber = requestNumber, status = status))
+    }
+
     suspend fun createTransfer(req: TransferRequest) = guard { api.createTransfer(req) }
 
     suspend fun convert(req: ConversionRequest) = guard { api.conversion(req) }
@@ -114,5 +122,25 @@ class PagwaveRepository(private val client: PagwaveApiClient) {
         api.notificationAction(NotificationActionRequest(action = "test"))
     }
 
-    suspend fun fetchIntegrations() = guard { api.getIntegrations() }
+    suspend fun sendWeeklyDigest() = guard {
+        api.notificationAction(NotificationActionRequest(action = "weekly_digest"))
+    }
+
+    suspend fun fetchIntegrations(reveal: Boolean = false) = guard {
+        api.getIntegrations(reveal = if (reveal) 1 else null)
+    }
+
+    suspend fun rotateApiKey() = guard {
+        api.integrationKeyAction(IntegrationKeyActionRequest(action = "rotate"))
+    }
+
+    suspend fun updateIntegrationConfig(label: String?, webhookUrl: String?) = guard {
+        api.integrationKeyAction(
+            IntegrationKeyActionRequest(
+                action = "update",
+                label = label?.trim()?.takeIf { it.length >= 2 },
+                webhookUrl = webhookUrl?.trim(),
+            ),
+        )
+    }
 }

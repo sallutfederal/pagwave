@@ -1,5 +1,7 @@
 package com.pagwave.android.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -22,13 +23,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.pagwave.android.core.designsystem.*
 import com.pagwave.android.core.i18n.AppStrings
 import com.pagwave.android.core.model.CurrenciesCatalog
+import com.pagwave.android.core.model.DynamicFieldSpec
 import com.pagwave.android.ui.state.AppUiState
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -57,12 +59,13 @@ fun WalletScreen(
     state: AppUiState,
     strings: AppStrings,
     initialTab: WalletTab = WalletTab.DEPOSIT,
-    onCreateDeposit: (currency: String, method: String, amount: Double, payerName: String, payerTaxId: String) -> Unit,
+    onCreateDeposit: (currency: String, method: String, mode: String, amount: Double?, payer: Map<String, String>) -> Unit,
+    onSimulateSandbox: (requestNumber: String) -> Unit,
     onSendP2P: (currency: String, email: String, amount: Double, desc: String) -> Unit,
     onSimulateFx: (from: String, to: String, amount: Double) -> Unit,
     onExecuteFx: (from: String, to: String, amount: Double) -> Unit,
-    onRequestWithdraw: (beneficiaryId: String?, currency: String, rail: String, fieldKey: String, dest: String, amount: Double, desc: String) -> Unit,
-    onSaveBeneficiary: (label: String, currency: String, rail: String, fieldKey: String, dest: String) -> Unit,
+    onRequestWithdraw: (beneficiaryId: String?, currency: String, rail: String, details: Map<String, String>, amount: Double, desc: String) -> Unit,
+    onSaveBeneficiary: (label: String, currency: String, rail: String, details: Map<String, String>) -> Unit,
     onDeleteBeneficiary: (id: String) -> Unit,
 ) {
     val c = PagwaveThemeTokens.colors
@@ -71,11 +74,15 @@ fun WalletScreen(
 
     var activeTab by remember(initialTab) { mutableStateOf(initialTab) }
     var selectedCurrency by remember { mutableStateOf("BRL") }
+    val spec = CurrenciesCatalog.spec(selectedCurrency)
 
     // Deposit inputs
+    var depositMethod by remember(selectedCurrency) {
+        mutableStateOf(spec.cashinMethods.firstOrNull()?.id ?: "")
+    }
+    var depositMode by remember(selectedCurrency) { mutableStateOf("dynamic") }
     var depositAmount by remember { mutableStateOf("100") }
-    var payerName by remember { mutableStateOf("") }
-    var payerTaxId by remember { mutableStateOf("") }
+    val payerValues = remember(selectedCurrency) { mutableStateMapOf<String, String>() }
 
     // P2P inputs
     var recipientEmail by remember { mutableStateOf("") }
@@ -88,13 +95,24 @@ fun WalletScreen(
     var fxAmount by remember { mutableStateOf("100") }
 
     // Withdraw inputs
-    var selectedBeneficiaryId by remember { mutableStateOf<String?>(null) }
-    var withdrawDest by remember { mutableStateOf("") }
+    var selectedBeneficiaryId by remember(selectedCurrency) { mutableStateOf<String?>(null) }
+    var selectedRail by remember(selectedCurrency) {
+        mutableStateOf(spec.cashoutRails.firstOrNull()?.id ?: "")
+    }
+    val cashoutValues = remember(selectedCurrency, selectedRail) {
+        mutableStateMapOf<String, String>().apply {
+            spec.cashoutFields
+                .filter { it.whenMethod == null || it.whenMethod.contains(selectedRail) }
+                .forEach { field ->
+                    val firstOpt = field.options?.firstOrNull()?.value
+                    if (firstOpt != null) put(field.key, firstOpt)
+                }
+        }
+    }
     var withdrawAmount by remember { mutableStateOf("") }
     var withdrawDesc by remember { mutableStateOf("") }
     var saveAsLabel by remember { mutableStateOf("") }
 
-    val spec = CurrenciesCatalog.spec(selectedCurrency)
     val availableSelected = state.wallets.balances[selectedCurrency]?.available ?: 0.0
 
     LazyColumn(
@@ -217,55 +235,110 @@ fun WalletScreen(
                 WalletTab.DEPOSIT -> {
                     PagwaveCard {
                         Text(
-                            text = "${strings.tabDeposit} · ${spec.cashinMethod}",
+                            text = "${strings.tabDeposit} · $selectedCurrency",
                             color = c.foreground,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        PagwaveTextField(
-                            value = depositAmount,
-                            onValueChange = { depositAmount = it },
-                            label = "${strings.amountLabel} ($selectedCurrency)",
-                            placeholder = "100.00",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PagwaveTextField(
-                            value = payerName,
-                            onValueChange = { payerName = it },
-                            label = "Nome do pagador (opcional)",
-                            placeholder = state.summary.greeting.name.ifBlank { "Titular" },
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PagwaveTextField(
-                            value = payerTaxId,
-                            onValueChange = { payerTaxId = it },
-                            label = "CPF/Documento (se exigido pelo trilho)",
-                            placeholder = "Opcional",
-                        )
+
+                        if (spec.cashinMethods.size > 1) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(spec.cashinMethods) { m ->
+                                    RailChip(
+                                        label = m.label,
+                                        selected = depositMethod == m.id,
+                                        onClick = { depositMethod = m.id },
+                                    )
+                                }
+                            }
+                        }
+
+                        if (spec.supportsOpenValueCashin && depositMethod != "OXXO") {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                RailChip(
+                                    label = "Valor fixo",
+                                    selected = depositMode == "dynamic",
+                                    onClick = { depositMode = "dynamic" },
+                                )
+                                RailChip(
+                                    label = "Valor aberto (QR Estático)",
+                                    selected = depositMode == "static",
+                                    onClick = { depositMode = "static" },
+                                )
+                            }
+                        } else if (depositMode != "dynamic") {
+                            depositMode = "dynamic"
+                        }
+
+                        if (depositMode == "dynamic") {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            PagwaveTextField(
+                                value = depositAmount,
+                                onValueChange = { depositAmount = it },
+                                label = "${strings.amountLabel} ($selectedCurrency)",
+                                placeholder = if (spec.integerOnly) "10000" else "100.00",
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = if (spec.integerOnly) KeyboardType.Number else KeyboardType.Decimal,
+                                ),
+                            )
+                        }
+
+                        spec.cashinPayerFields.forEach { field ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            DynamicFieldInput(
+                                field = field,
+                                value = payerValues[field.key].orEmpty(),
+                                onValueChange = { payerValues[field.key] = it },
+                            )
+                        }
+
                         Spacer(modifier = Modifier.height(16.dp))
                         PagwavePrimaryButton(
                             text = strings.generateDeposit,
                             loading = state.walletBusy,
                             onClick = {
-                                val amt = depositAmount.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                if (amt > 0.0) {
-                                    onCreateDeposit(selectedCurrency, spec.cashinMethod, amt, payerName, payerTaxId)
+                                val amt = depositAmount.replace(",", ".").toDoubleOrNull()
+                                if (depositMode == "dynamic" && (amt == null || amt <= 0.0)) {
+                                    Toast.makeText(context, "Informe um valor válido.", Toast.LENGTH_SHORT).show()
+                                    return@PagwavePrimaryButton
                                 }
+                                val missing = spec.cashinPayerFields.firstOrNull {
+                                    it.required && payerValues[it.key].orEmpty().isBlank()
+                                }
+                                if (missing != null) {
+                                    Toast.makeText(context, "Preencha: ${missing.label}", Toast.LENGTH_SHORT).show()
+                                    return@PagwavePrimaryButton
+                                }
+                                onCreateDeposit(
+                                    selectedCurrency,
+                                    depositMethod,
+                                    depositMode,
+                                    amt,
+                                    payerValues.toMap(),
+                                )
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )
 
                         // Cashin QR / EMV / Address result
                         state.cashinResult?.let { cashin ->
-                            val qrCopy = cashin.result["qr_code"]?.jsonPrimitive?.contentOrNull
+                            val copyable = cashin.result["qr_code_text"]?.jsonPrimitive?.contentOrNull
                                 ?: cashin.result["emv"]?.jsonPrimitive?.contentOrNull
+                                ?: cashin.result["qr_code"]?.jsonPrimitive?.contentOrNull
                                 ?: cashin.result["pix_copy_paste"]?.jsonPrimitive?.contentOrNull
                                 ?: cashin.result["clabe"]?.jsonPrimitive?.contentOrNull
                                 ?: cashin.result["deposit_address"]?.jsonPrimitive?.contentOrNull
-                                ?: cashin.result["payment_url"]?.jsonPrimitive?.contentOrNull
+                                ?: cashin.result["cvu"]?.jsonPrimitive?.contentOrNull
+                                ?: cashin.result["barcode"]?.jsonPrimitive?.contentOrNull
                                 ?: cashin.externalId
+
+                            val checkoutUrl = cashin.result["checkout_url"]?.jsonPrimitive?.contentOrNull
+                                ?: cashin.result["payment_url"]?.jsonPrimitive?.contentOrNull
+                                ?: cashin.result["ticket_url"]?.jsonPrimitive?.contentOrNull
+
+                            val requestNum = cashin.result["request_number"]?.jsonPrimitive?.contentOrNull
 
                             Spacer(modifier = Modifier.height(16.dp))
                             Box(
@@ -276,29 +349,59 @@ fun WalletScreen(
                                     .border(1.dp, c.success.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
                                     .padding(14.dp),
                             ) {
-                                Column {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                                     Text(
-                                        text = "Cobrança gerada (${cashin.externalId})",
+                                        text = "Cobrança pronta (${cashin.externalId})",
                                         color = c.success,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.SemiBold,
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    if (copyable.length >= 12) {
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        PagwaveQrCode(content = copyable, size = 164.dp)
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
                                     Text(
-                                        text = qrCopy,
+                                        text = copyable,
                                         color = c.foreground,
                                         fontFamily = FontFamily.Monospace,
                                         fontSize = 11.sp,
                                         maxLines = 4,
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
-                                    PagwaveOutlineButton(
-                                        text = strings.copyCode,
-                                        onClick = {
-                                            clipboard.setText(AnnotatedString(qrCopy))
-                                            Toast.makeText(context, strings.copiedToast, Toast.LENGTH_SHORT).show()
-                                        },
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        PagwaveOutlineButton(
+                                            text = strings.copyCode,
+                                            onClick = {
+                                                clipboard.setText(AnnotatedString(copyable))
+                                                Toast.makeText(context, strings.copiedToast, Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        if (!checkoutUrl.isNullOrBlank()) {
+                                            PagwaveOutlineButton(
+                                                text = "Abrir Checkout",
+                                                onClick = {
+                                                    runCatching {
+                                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                        }
+                                    }
+                                    if (state.wallets.isSandbox && !requestNum.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        PagwaveOutlineButton(
+                                            text = "Simular Pagamento (Sandbox)",
+                                            tint = c.brandGold,
+                                            onClick = { onSimulateSandbox(requestNum) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -347,9 +450,11 @@ fun WalletScreen(
                             loading = state.walletBusy,
                             onClick = {
                                 val amt = p2pAmount.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                if (recipientEmail.isNotBlank() && amt > 0.0) {
-                                    onSendP2P(selectedCurrency, recipientEmail, amt, p2pDesc)
+                                if (recipientEmail.isBlank() || amt <= 0.0) {
+                                    Toast.makeText(context, "Informe e-mail válido e valor > 0.", Toast.LENGTH_SHORT).show()
+                                    return@PagwavePrimaryButton
                                 }
+                                onSendP2P(selectedCurrency, recipientEmail, amt, p2pDesc)
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -373,7 +478,10 @@ fun WalletScreen(
                                 CurrencyPill(
                                     code = code,
                                     selected = fxFrom == code,
-                                    onClick = { fxFrom = code },
+                                    onClick = {
+                                        fxFrom = code
+                                        if (fxTo == code) fxTo = convertible.first { it != code }
+                                    },
                                 )
                             }
                         }
@@ -399,10 +507,12 @@ fun WalletScreen(
 
                         state.fxSimulation?.let { sim ->
                             val outAmt = sim["converted_amount"]?.jsonPrimitive?.contentOrNull
+                                ?: sim["net_amount"]?.jsonPrimitive?.contentOrNull
+                                ?: sim["estimated_amount"]?.jsonPrimitive?.contentOrNull
                                 ?: sim["to_amount"]?.jsonPrimitive?.contentOrNull
-                                ?: sim["amount_to"]?.jsonPrimitive?.contentOrNull
                             val rate = sim["rate"]?.jsonPrimitive?.contentOrNull
                                 ?: sim["exchange_rate"]?.jsonPrimitive?.contentOrNull
+                            val fee = sim["fee"]?.jsonPrimitive?.contentOrNull
                             Spacer(modifier = Modifier.height(12.dp))
                             Box(
                                 modifier = Modifier
@@ -411,19 +521,18 @@ fun WalletScreen(
                                     .background(c.brandGoldSoft)
                                     .padding(12.dp),
                             ) {
-                                Column {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     Text(
-                                        text = "Cotação estimada: ${outAmt ?: "--"} $fxTo",
+                                        text = "Você receberá: ${outAmt ?: "--"} $fxTo",
                                         color = c.foreground,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp,
                                     )
                                     if (rate != null) {
-                                        Text(
-                                            text = "Taxa aplicada: $rate",
-                                            color = c.mutedForeground,
-                                            fontSize = 12.sp,
-                                        )
+                                        Text("Taxa: 1 $fxFrom = $rate $fxTo", color = c.mutedForeground, fontSize = 12.sp)
+                                    }
+                                    if (fee != null) {
+                                        Text("Tarifa: $fee", color = c.mutedForeground, fontSize = 11.sp)
                                     }
                                 }
                             }
@@ -461,20 +570,21 @@ fun WalletScreen(
 
                 WalletTab.WITHDRAW -> {
                     val currencyBeneficiaries = state.beneficiaries.filter { it.currency == selectedCurrency }
+                    val activeFields = spec.cashoutFields.filter {
+                        it.whenMethod == null || it.whenMethod.contains(selectedRail)
+                    }
+
                     PagwaveCard {
                         Text(
-                            text = "${strings.tabWithdraw} ($selectedCurrency · ${spec.cashoutRail})",
+                            text = "${strings.tabWithdraw} ($selectedCurrency · $selectedRail)",
                             color = c.foreground,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
+
                         if (currencyBeneficiaries.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "Chaves salvas:",
-                                color = c.mutedForeground,
-                                fontSize = 12.sp,
-                            )
+                            Text("Chaves / destinos salvos:", color = c.mutedForeground, fontSize = 12.sp)
                             Spacer(modifier = Modifier.height(6.dp))
                             currencyBeneficiaries.forEach { ben ->
                                 val selected = selectedBeneficiaryId == ben.id
@@ -508,26 +618,48 @@ fun WalletScreen(
                         }
 
                         if (selectedBeneficiaryId == null) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PagwaveTextField(
-                                value = withdrawDest,
-                                onValueChange = { withdrawDest = it },
-                                label = spec.cashoutFieldLabel,
-                                placeholder = spec.cashoutPlaceholder,
-                            )
+                            if (spec.cashoutRails.size > 1) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(spec.cashoutRails) { r ->
+                                        RailChip(
+                                            label = r.label,
+                                            selected = selectedRail == r.id,
+                                            onClick = { selectedRail = r.id },
+                                        )
+                                    }
+                                }
+                            }
+
+                            activeFields.forEach { field ->
+                                Spacer(modifier = Modifier.height(10.dp))
+                                DynamicFieldInput(
+                                    field = field,
+                                    value = cashoutValues[field.key].orEmpty(),
+                                    onValueChange = { cashoutValues[field.key] = it },
+                                )
+                            }
+
                             Spacer(modifier = Modifier.height(10.dp))
                             PagwaveTextField(
                                 value = saveAsLabel,
                                 onValueChange = { saveAsLabel = it },
-                                label = "Salvar chave com apelido (opcional)",
-                                placeholder = "Ex.: Conta Principal",
+                                label = "Salvar favorecido com apelido (opcional)",
+                                placeholder = "Ex.: Minha Conta Principal",
                             )
-                            if (saveAsLabel.isNotBlank() && withdrawDest.isNotBlank()) {
+                            if (saveAsLabel.isNotBlank()) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 PagwaveOutlineButton(
-                                    text = "Salvar destinatário",
+                                    text = "Salvar destinatário no banco",
                                     onClick = {
-                                        onSaveBeneficiary(saveAsLabel, selectedCurrency, spec.cashoutRail, spec.cashoutFieldKey, withdrawDest)
+                                        val missing = activeFields.firstOrNull {
+                                            it.required && cashoutValues[it.key].orEmpty().isBlank()
+                                        }
+                                        if (missing != null) {
+                                            Toast.makeText(context, "Preencha: ${missing.label}", Toast.LENGTH_SHORT).show()
+                                            return@PagwaveOutlineButton
+                                        }
+                                        onSaveBeneficiary(saveAsLabel, selectedCurrency, selectedRail, cashoutValues.toMap())
                                         saveAsLabel = ""
                                     },
                                 )
@@ -540,7 +672,9 @@ fun WalletScreen(
                             onValueChange = { withdrawAmount = it },
                             label = "${strings.amountLabel} ($selectedCurrency)",
                             placeholder = "25.00",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = if (spec.integerOnly) KeyboardType.Number else KeyboardType.Decimal,
+                            ),
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         PagwaveTextField(
@@ -555,17 +689,27 @@ fun WalletScreen(
                             loading = state.walletBusy,
                             onClick = {
                                 val amt = withdrawAmount.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                if (amt > 0.0 && (selectedBeneficiaryId != null || withdrawDest.isNotBlank())) {
-                                    onRequestWithdraw(
-                                        selectedBeneficiaryId,
-                                        selectedCurrency,
-                                        spec.cashoutRail,
-                                        spec.cashoutFieldKey,
-                                        withdrawDest,
-                                        amt,
-                                        withdrawDesc,
-                                    )
+                                if (amt <= 0.0) {
+                                    Toast.makeText(context, "Informe um valor maior que zero.", Toast.LENGTH_SHORT).show()
+                                    return@PagwavePrimaryButton
                                 }
+                                if (selectedBeneficiaryId == null) {
+                                    val missing = activeFields.firstOrNull {
+                                        it.required && cashoutValues[it.key].orEmpty().isBlank()
+                                    }
+                                    if (missing != null) {
+                                        Toast.makeText(context, "Preencha: ${missing.label}", Toast.LENGTH_SHORT).show()
+                                        return@PagwavePrimaryButton
+                                    }
+                                }
+                                onRequestWithdraw(
+                                    selectedBeneficiaryId,
+                                    selectedCurrency,
+                                    selectedRail,
+                                    cashoutValues.toMap(),
+                                    amt,
+                                    withdrawDesc,
+                                )
                             },
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -573,5 +717,56 @@ fun WalletScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DynamicFieldInput(
+    field: DynamicFieldSpec,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    val label = if (field.required) "${field.label} *" else field.label
+    if (field.options != null) {
+        PagwaveDropdownField(
+            label = label,
+            value = value.ifBlank { field.options.firstOrNull()?.value.orEmpty() },
+            options = field.options,
+            onSelect = onValueChange,
+        )
+    } else {
+        PagwaveTextField(
+            value = value,
+            onValueChange = onValueChange,
+            label = label,
+            placeholder = field.placeholder,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (field.isEmail) KeyboardType.Email else KeyboardType.Text,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun RailChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val c = PagwaveThemeTokens.colors
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (selected) c.accent else c.surfaceSubtle)
+            .border(1.dp, if (selected) c.accent else c.line, CircleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = label,
+            color = if (selected) c.accentFg else c.foreground,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+        )
     }
 }

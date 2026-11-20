@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import com.pagwave.android.core.network.AppPreferencesStore
 import com.pagwave.android.core.network.PagwaveApiClient
 import com.pagwave.android.data.PagwaveRepository
 
@@ -12,9 +13,12 @@ class PagwaveApplication : Application() {
         private set
     lateinit var repository: PagwaveRepository
         private set
+    lateinit var uiPrefs: AppPreferencesStore
+        private set
 
     override fun onCreate() {
         super.onCreate()
+        uiPrefs = AppPreferencesStore(this)
         apiClient = PagwaveApiClient(this)
         repository = PagwaveRepository(apiClient)
         createNotificationChannel()

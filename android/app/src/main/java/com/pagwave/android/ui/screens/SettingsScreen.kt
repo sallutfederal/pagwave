@@ -51,11 +51,17 @@ fun SettingsScreen(
     onSaveProfile: (firstName: String, lastName: String, phone: String, country: String, companyName: String) -> Unit,
     onUpdatePref: (NotificationPreferencesDto) -> Unit,
     onTestNotification: () -> Unit,
+    onWeeklyDigest: () -> Unit,
     onSelectLocale: (PagwaveLocale) -> Unit,
     onToggleTheme: () -> Unit,
     onChangePassword: (current: String, next: String) -> Unit,
     onSetup2FA: () -> Unit,
     onConfirm2FA: (code: String) -> Unit,
+    onDisable2FA: (password: String) -> Unit,
+    onRevealApiSecret: () -> Unit,
+    onSaveIntegrationConfig: (label: String, webhookUrl: String) -> Unit,
+    onRotateApiKey: () -> Unit,
+    onLogoutAll: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val c = PagwaveThemeTokens.colors
@@ -71,6 +77,14 @@ fun SettingsScreen(
     var currentPass by remember { mutableStateOf("") }
     var newPass by remember { mutableStateOf("") }
     var totpCode by remember { mutableStateOf("") }
+    var disable2FAPass by remember { mutableStateOf("") }
+
+    var apiLabel by remember(state.integrations.credential) {
+        mutableStateOf(state.integrations.credential?.label.orEmpty())
+    }
+    var webhookUrl by remember(state.integrations.credential) {
+        mutableStateOf(state.integrations.credential?.webhookUrl.orEmpty())
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -85,14 +99,19 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(strings.settingsProfile, color = c.foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(state.profileEmail, color = c.mutedForeground, fontSize = 12.sp)
                     }
-                    PagwaveStatusBadge(
-                        text = state.profile?.kycStatus ?: state.wallets.kycStatus,
-                        tone = if ((state.profile?.kycStatus ?: state.wallets.kycStatus) == "APPROVED") StatusTone.SUCCESS else StatusTone.GOLD,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (state.emailVerified) {
+                            PagwaveStatusBadge(text = "E-mail OK", tone = StatusTone.SUCCESS)
+                        }
+                        PagwaveStatusBadge(
+                            text = state.profile?.kycStatus ?: state.wallets.kycStatus,
+                            tone = if ((state.profile?.kycStatus ?: state.wallets.kycStatus) == "APPROVED") StatusTone.SUCCESS else StatusTone.GOLD,
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(14.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -141,7 +160,7 @@ fun SettingsScreen(
             }
         }
 
-        // Notifications (4 switches synced with Postgres + Android push alert test)
+        // Notifications (4 switches synced with Postgres + Test + Weekly Digest)
         item {
             val prefs = state.preferences
             PagwaveCard {
@@ -160,11 +179,21 @@ fun SettingsScreen(
                     onUpdatePref(prefs.copy(securityNotices = it))
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                PagwaveOutlineButton(
-                    text = strings.testNotification,
-                    onClick = onTestNotification,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                )
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PagwaveOutlineButton(
+                        text = strings.testNotification,
+                        onClick = onTestNotification,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PagwaveOutlineButton(
+                        text = "Resumo 7 dias",
+                        onClick = onWeeklyDigest,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 
@@ -202,8 +231,18 @@ fun SettingsScreen(
         // Security & 2FA
         item {
             PagwaveCard {
-                Text(strings.settingsSecurity, color = c.foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(strings.settingsSecurity, color = c.foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    PagwaveStatusBadge(
+                        text = if (state.twoFactorEnabled) "2FA Ativo" else "2FA Desativado",
+                        tone = if (state.twoFactorEnabled) StatusTone.SUCCESS else StatusTone.NEUTRAL,
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
                 PagwaveTextField(
                     value = currentPass,
                     onValueChange = { currentPass = it },
@@ -225,50 +264,83 @@ fun SettingsScreen(
                             onChangePassword(currentPass, newPass)
                             currentPass = ""
                             newPass = ""
+                        } else {
+                            Toast.makeText(context, "Informe senha atual e nova senha (8+ caracteres).", Toast.LENGTH_SHORT).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                PagwaveOutlineButton(
-                    text = "Configurar 2FA (Autenticador)",
-                    onClick = onSetup2FA,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                state.twoFactorSetup?.secret?.let { secret ->
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(c.surfaceSubtle)
-                            .padding(10.dp),
-                    ) {
-                        Text(
-                            text = "Chave 2FA: $secret",
-                            color = c.foreground,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(14.dp))
+                if (state.twoFactorEnabled) {
                     PagwaveTextField(
-                        value = totpCode,
-                        onValueChange = { if (it.length <= 6) totpCode = it.filter { ch -> ch.isDigit() } },
-                        label = "Confirmar código de 6 dígitos",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        value = disable2FAPass,
+                        onValueChange = { disable2FAPass = it },
+                        label = "Senha para desativar 2FA",
+                        visualTransformation = PasswordVisualTransformation(),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    PagwavePrimaryButton(
-                        text = "Ativar 2FA",
-                        onClick = { if (totpCode.length == 6) onConfirm2FA(totpCode) },
+                    PagwaveOutlineButton(
+                        text = "Desativar 2FA",
+                        tint = c.danger,
+                        onClick = {
+                            if (disable2FAPass.isNotBlank()) {
+                                onDisable2FA(disable2FAPass)
+                                disable2FAPass = ""
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                     )
+                } else {
+                    PagwaveOutlineButton(
+                        text = "Configurar 2FA (Autenticador)",
+                        onClick = onSetup2FA,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    state.twoFactorSetup?.secret?.let { secret ->
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(c.surfaceSubtle)
+                                .clickable {
+                                    clipboard.setText(AnnotatedString(secret))
+                                    Toast.makeText(context, strings.copiedToast, Toast.LENGTH_SHORT).show()
+                                }
+                                .padding(10.dp),
+                        ) {
+                            Text(
+                                text = "Chave 2FA (toque para copiar): $secret",
+                                color = c.foreground,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 12.sp,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        PagwaveTextField(
+                            value = totpCode,
+                            onValueChange = { if (it.length <= 6) totpCode = it.filter { ch -> ch.isDigit() } },
+                            label = "Confirmar código de 6 dígitos",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        PagwavePrimaryButton(
+                            text = "Ativar 2FA",
+                            onClick = {
+                                if (totpCode.length == 6) {
+                                    onConfirm2FA(totpCode)
+                                    totpCode = ""
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
 
-        // API Credentials Preview
+        // Full API Integrations Management
         state.integrations.credential?.let { cred ->
             item {
                 PagwaveCard {
@@ -284,39 +356,95 @@ fun SettingsScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(10.dp))
+                    Text("Client ID: ${cred.clientId}", color = c.foreground, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
                     Text(
-                        text = "Client ID: ${cred.clientId}",
-                        color = c.foreground,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                    )
-                    Text(
-                        text = "Chamadas API: ${cred.requestCount}",
+                        text = if (state.revealedApiSecret != null) {
+                            "Secret: ${state.revealedApiSecret}"
+                        } else {
+                            "Secret: ${cred.secretPreview}"
+                        },
                         color = c.mutedForeground,
+                        fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    PagwaveOutlineButton(
-                        text = "Copiar Client ID",
-                        onClick = {
-                            clipboard.setText(AnnotatedString(cred.clientId))
-                            Toast.makeText(context, strings.copiedToast, Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
+                    Text(
+                        text = "Chamadas API: ${cred.requestCount} · Logs recentes: ${state.integrations.logs.size}",
+                        color = c.subtleForeground,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PagwaveOutlineButton(
+                            text = "Copiar Client ID",
+                            onClick = {
+                                clipboard.setText(AnnotatedString(cred.clientId))
+                                Toast.makeText(context, strings.copiedToast, Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                        PagwaveOutlineButton(
+                            text = if (state.revealedApiSecret != null) "Copiar Secret" else "Revelar Secret",
+                            onClick = {
+                                if (state.revealedApiSecret != null) {
+                                    clipboard.setText(AnnotatedString(state.revealedApiSecret))
+                                    Toast.makeText(context, strings.copiedToast, Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onRevealApiSecret()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    PagwaveTextField(
+                        value = apiLabel,
+                        onValueChange = { apiLabel = it },
+                        label = "Rótulo da aplicação",
+                        placeholder = "Minha Integração",
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PagwaveTextField(
+                        value = webhookUrl,
+                        onValueChange = { webhookUrl = it },
+                        label = "Webhook URL",
+                        placeholder = "https://seu-backend.com/webhook",
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PagwavePrimaryButton(
+                            text = "Salvar Webhook",
+                            onClick = { onSaveIntegrationConfig(apiLabel, webhookUrl) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        PagwaveOutlineButton(
+                            text = "Rotacionar Chave",
+                            tint = c.warning,
+                            onClick = onRotateApiKey,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
         }
 
-        // Logout
+        // Session Controls & Logout
         item {
-            PagwaveOutlineButton(
-                text = strings.signOut,
-                onClick = onLogout,
-                tint = c.danger,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PagwaveOutlineButton(
+                    text = "Encerrar sessões",
+                    onClick = onLogoutAll,
+                    modifier = Modifier.weight(1f),
+                )
+                PagwaveOutlineButton(
+                    text = strings.signOut,
+                    onClick = onLogout,
+                    tint = c.danger,
+                    modifier = Modifier.weight(1f),
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

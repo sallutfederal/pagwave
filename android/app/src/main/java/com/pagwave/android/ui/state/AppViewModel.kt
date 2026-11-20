@@ -17,11 +17,14 @@ import com.pagwave.android.R
 import com.pagwave.android.core.i18n.PagwaveLocale
 import com.pagwave.android.core.model.*
 import com.pagwave.android.data.PagwaveRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
@@ -47,9 +50,12 @@ data class AppUiState(
     val transactions: List<TransactionDto> = emptyList(),
     val beneficiaries: List<BeneficiaryDto> = emptyList(),
     val integrations: IntegrationsResponse = IntegrationsResponse(),
+    val revealedApiSecret: String? = null,
 
-    // Profile & Notifications
+    // Profile, Security & Notifications
     val profileEmail: String = "",
+    val twoFactorEnabled: Boolean = false,
+    val emailVerified: Boolean = false,
     val profile: UserProfileDto? = null,
     val preferences: NotificationPreferencesDto = NotificationPreferencesDto(),
     val notifications: List<NotificationItemDto> = emptyList(),
@@ -70,11 +76,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as PagwaveApplication
     private val repo: PagwaveRepository = app.repository
     private var lastSeenTopNotificationId: String? = null
+    private var pollingJob: Job? = null
 
-    private val _state = MutableStateFlow(AppUiState())
+    private val _state = MutableStateFlow(
+        AppUiState(
+            darkTheme = app.uiPrefs.darkTheme,
+            locale = app.uiPrefs.locale,
+        ),
+    )
     val state: StateFlow<AppUiState> = _state.asStateFlow()
 
     init {
+        repo.setSessionExpiredListener {
+            viewModelScope.launch {
+                pollingJob?.cancel()
+                pollingJob = null
+                _state.value = AppUiState(
+                    checkingSession = false,
+                    isAuthenticated = false,
+                    darkTheme = app.uiPrefs.darkTheme,
+                    locale = app.uiPrefs.locale,
+                    authNotice = "Sua sessão expirou. Faça login novamente.",
+                )
+            }
+        }
         bootstrap()
     }
 
@@ -94,6 +119,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 refreshAll()
+                startNotificationPolling()
             } else {
                 repo.clearSession()
                 _state.update { it.copy(checkingSession = false, isAuthenticated = false) }
@@ -101,11 +127,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun startNotificationPolling() {
+        pollingJob?.cancel()
+        pollingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(25_000)
+                if (!_state.value.isAuthenticated) break
+                repo.fetchNotifications().onSuccess { notif ->
+                    handleIncomingNotifications(notif)
+                    _state.update {
+                        it.copy(
+                            notifications = notif.notifications,
+                            unreadCount = notif.unreadCount,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleIncomingNotifications(notif: NotificationsResponse) {
+        if (notif.notifications.isNotEmpty()) {
+            val newest = notif.notifications.first()
+            if (lastSeenTopNotificationId != null &&
+                lastSeenTopNotificationId != newest.id &&
+                !newest.isRead
+            ) {
+                postSystemNotification(newest.title, newest.body)
+            }
+            lastSeenTopNotificationId = newest.id
+        }
+    }
+
     fun toggleTheme() {
-        _state.update { it.copy(darkTheme = !it.darkTheme) }
+        val next = !_state.value.darkTheme
+        app.uiPrefs.darkTheme = next
+        _state.update { it.copy(darkTheme = next) }
     }
 
     fun setLocale(newLocale: PagwaveLocale) {
+        app.uiPrefs.locale = newLocale
         _state.update { it.copy(locale = newLocale) }
         if (_state.value.isAuthenticated) {
             viewModelScope.launch {
@@ -147,6 +208,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
                         refreshAll()
+                        startNotificationPolling()
                     }
                 },
                 onFailure = { err ->
@@ -181,6 +243,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                     refreshAll()
+                    startNotificationPolling()
                 },
                 onFailure = { err ->
                     _state.update {
@@ -222,13 +285,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         viewModelScope.launch {
+            pollingJob?.cancel()
+            pollingJob = null
             repo.logout()
             lastSeenTopNotificationId = null
             _state.value = AppUiState(
                 checkingSession = false,
                 isAuthenticated = false,
-                darkTheme = _state.value.darkTheme,
-                locale = _state.value.locale,
+                darkTheme = app.uiPrefs.darkTheme,
+                locale = app.uiPrefs.locale,
+            )
+        }
+    }
+
+    fun logoutAllSessions() {
+        viewModelScope.launch {
+            pollingJob?.cancel()
+            pollingJob = null
+            repo.securityAction(SecurityActionRequest(action = "logout-all"))
+            repo.clearSession()
+            lastSeenTopNotificationId = null
+            _state.value = AppUiState(
+                checkingSession = false,
+                isAuthenticated = false,
+                darkTheme = app.uiPrefs.darkTheme,
+                locale = app.uiPrefs.locale,
+                authNotice = "Todas as sessões ativas foram encerradas.",
             )
         }
     }
@@ -247,7 +329,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val notifDef = async { repo.fetchNotifications() }
             val profDef = async { repo.fetchProfile() }
             val benDef = async { repo.fetchBeneficiaries() }
-            val intDef = async { repo.fetchIntegrations() }
+            val intDef = async { repo.fetchIntegrations(reveal = false) }
 
             val sum = sumDef.await().getOrNull()
             val wal = walDef.await().getOrNull()
@@ -259,20 +341,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val bens = benDef.await().getOrNull()?.beneficiaries
             val integ = intDef.await().getOrNull()
 
-            if (notif != null && notif.notifications.isNotEmpty()) {
-                val newest = notif.notifications.first()
-                if (lastSeenTopNotificationId != null &&
-                    lastSeenTopNotificationId != newest.id &&
-                    !newest.isRead
-                ) {
-                    postSystemNotification(newest.title, newest.body)
+            if (notif != null) {
+                handleIncomingNotifications(notif)
+            }
+
+            if (prof?.locale != null) {
+                val syncedLoc = PagwaveLocale.fromCode(prof.locale)
+                if (syncedLoc != _state.value.locale) {
+                    app.uiPrefs.locale = syncedLoc
                 }
-                lastSeenTopNotificationId = newest.id
             }
 
             _state.update { cur ->
                 cur.copy(
                     loadingData = false,
+                    locale = prof?.locale?.let { PagwaveLocale.fromCode(it) } ?: cur.locale,
                     summary = sum ?: cur.summary,
                     wallets = wal ?: cur.wallets,
                     statistic = stat ?: cur.statistic,
@@ -281,6 +364,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     notifications = notif?.notifications ?: cur.notifications,
                     unreadCount = notif?.unreadCount ?: cur.unreadCount,
                     profileEmail = prof?.email?.takeIf { it.isNotBlank() } ?: cur.profileEmail,
+                    twoFactorEnabled = prof?.twoFactorEnabled ?: cur.twoFactorEnabled,
+                    emailVerified = prof?.emailVerified ?: cur.emailVerified,
                     profile = prof?.profile ?: cur.profile,
                     preferences = prof?.preferences ?: cur.preferences,
                     beneficiaries = bens ?: cur.beneficiaries,
@@ -301,21 +386,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ─── Wallet Actions ───────────────────────────────────────────────────
 
-    fun createDeposit(currency: String, method: String, amount: Double, payerName: String, payerTaxId: String) {
+    fun createDeposit(
+        currency: String,
+        method: String,
+        mode: String,
+        amount: Double?,
+        payer: Map<String, String>,
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(walletBusy = true, cashinResult = null) }
-            val payer = buildMap {
-                if (payerName.isNotBlank()) put("name", payerName.trim())
-                if (payerTaxId.isNotBlank()) put("document", payerTaxId.trim())
-            }
             val res = repo.createCashin(
                 CashinRequest(
                     purpose = "self_deposit",
                     currency = currency,
                     method = method,
-                    mode = "dynamic",
-                    amount = amount,
-                    payer = payer,
+                    mode = mode,
+                    amount = if (mode == "static") null else amount,
+                    payer = payer.filterValues { it.isNotBlank() },
                 ),
             )
             res.fold(
@@ -332,8 +419,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun clearCashinResult() {
-        _state.update { it.copy(cashinResult = null) }
+    fun simulateSandboxCashin(requestNumber: String) {
+        viewModelScope.launch {
+            _state.update { it.copy(walletBusy = true) }
+            repo.simulateSandboxPayment(requestNumber, "paid").fold(
+                onSuccess = {
+                    _state.update { it.copy(walletBusy = false) }
+                    showBanner("Pagamento Sandbox liquidado na sua carteira!")
+                    refreshAll()
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(walletBusy = false) }
+                    showBanner(err.message ?: "Falha na simulação sandbox.", isError = true)
+                },
+            )
+        }
     }
 
     fun sendP2P(currency: String, recipientEmail: String, amount: Double, description: String) {
@@ -400,8 +500,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         beneficiaryId: String?,
         currency: String,
         rail: String,
-        fieldKey: String,
-        destinationValue: String,
+        details: Map<String, String>,
         amount: Double,
         description: String,
     ) {
@@ -417,7 +516,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 CashoutRequest(
                     currency = currency,
                     rail = rail,
-                    details = mapOf(fieldKey to destinationValue.trim()),
+                    details = details.mapValues { it.value.trim() }.filterValues { it.isNotBlank() },
                     amount = amount,
                     description = description.trim().takeIf { it.isNotBlank() },
                 )
@@ -437,7 +536,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun saveBeneficiary(label: String, currency: String, rail: String, fieldKey: String, value: String) {
+    fun saveBeneficiary(label: String, currency: String, rail: String, details: Map<String, String>) {
         viewModelScope.launch {
             _state.update { it.copy(walletBusy = true) }
             val res = repo.createBeneficiary(
@@ -445,13 +544,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     label = label.trim(),
                     currency = currency,
                     rail = rail,
-                    details = mapOf(fieldKey to value.trim()),
+                    details = details.mapValues { it.value.trim() }.filterValues { it.isNotBlank() },
                 ),
             )
             res.fold(
                 onSuccess = {
                     _state.update { it.copy(walletBusy = false) }
-                    showBanner("Beneficiário salvo.")
+                    showBanner("Beneficiário salvo no banco.")
                     refreshAll()
                 },
                 onFailure = { err ->
@@ -468,6 +567,57 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 showBanner("Beneficiário removido.")
                 refreshAll()
             }
+        }
+    }
+
+    // ─── Integrations ─────────────────────────────────────────────────────
+
+    fun revealApiSecret() {
+        viewModelScope.launch {
+            repo.fetchIntegrations(reveal = true).fold(
+                onSuccess = { res ->
+                    _state.update {
+                        it.copy(
+                            integrations = res,
+                            revealedApiSecret = res.credential?.secret,
+                        )
+                    }
+                },
+                onFailure = { err -> showBanner(err.message ?: "Erro ao revelar chave.", isError = true) },
+            )
+        }
+    }
+
+    fun saveIntegrationConfig(label: String, webhookUrl: String) {
+        viewModelScope.launch {
+            repo.updateIntegrationConfig(label, webhookUrl).fold(
+                onSuccess = { res ->
+                    _state.update { cur ->
+                        cur.copy(
+                            integrations = cur.integrations.copy(credential = res.credential ?: cur.integrations.credential),
+                        )
+                    }
+                    showBanner("Webhook e nome da chave salvos.")
+                },
+                onFailure = { err -> showBanner(err.message ?: "Erro ao salvar webhook.", isError = true) },
+            )
+        }
+    }
+
+    fun rotateApiKey() {
+        viewModelScope.launch {
+            repo.rotateApiKey().fold(
+                onSuccess = { res ->
+                    _state.update { cur ->
+                        cur.copy(
+                            integrations = cur.integrations.copy(credential = res.credential ?: cur.integrations.credential),
+                            revealedApiSecret = res.credential?.secret,
+                        )
+                    }
+                    showBanner("Chaves da API rotacionadas com segurança.")
+                },
+                onFailure = { err -> showBanner(err.message ?: "Erro ao rotacionar chaves.", isError = true) },
+            )
         }
     }
 
@@ -507,6 +657,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 onFailure = { err ->
                     showBanner(err.message ?: "Falha ao enviar teste.", isError = true)
+                },
+            )
+        }
+    }
+
+    fun triggerWeeklyDigest() {
+        viewModelScope.launch {
+            repo.sendWeeklyDigest().fold(
+                onSuccess = {
+                    showBanner("Resumo semanal consolidado gerado e enviado!")
+                    refreshAll()
+                },
+                onFailure = { err ->
+                    showBanner(err.message ?: "Falha ao gerar resumo semanal.", isError = true)
                 },
             )
         }
@@ -575,11 +739,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repo.securityAction(SecurityActionRequest(action = "2fa-confirm", code = code)).fold(
                 onSuccess = {
-                    _state.update { it.copy(twoFactorSetup = null) }
+                    _state.update { it.copy(twoFactorSetup = null, twoFactorEnabled = true) }
                     showBanner("Autenticação 2FA ativada!")
                     refreshAll()
                 },
                 onFailure = { err -> showBanner(err.message ?: "Código 2FA inválido.", isError = true) },
+            )
+        }
+    }
+
+    fun disable2FA(password: String) {
+        viewModelScope.launch {
+            repo.securityAction(SecurityActionRequest(action = "2fa-disable", password = password)).fold(
+                onSuccess = {
+                    _state.update { it.copy(twoFactorEnabled = false, twoFactorSetup = null) }
+                    showBanner("Autenticação 2FA desativada.")
+                    refreshAll()
+                },
+                onFailure = { err -> showBanner(err.message ?: "Não foi possível desativar 2FA.", isError = true) },
             )
         }
     }

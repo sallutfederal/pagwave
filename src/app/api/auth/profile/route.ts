@@ -25,6 +25,9 @@ export function GET() {
     const [me, prefs] = await Promise.all([
       backendFetch<{
         email: string;
+        locale?: string;
+        twoFactorEnabled?: boolean;
+        emailVerified?: boolean;
         profile: {
           firstName?: string;
           lastName?: string;
@@ -42,6 +45,9 @@ export function GET() {
     return {
       ok: true,
       email: me.email,
+      locale: me.locale ?? "pt",
+      twoFactorEnabled: Boolean(me.twoFactorEnabled),
+      emailVerified: Boolean(me.emailVerified),
       profile: me.profile,
       preferences: prefs.preferences,
     };

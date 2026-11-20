@@ -75,6 +75,9 @@ interface PagwaveApi {
     @POST("api/wallet/cashin")
     suspend fun createCashin(@Body body: CashinRequest): CashinResponse
 
+    @POST("api/wallet/sandbox/simulate")
+    suspend fun simulateSandbox(@Body body: SandboxSimulateRequest): SandboxSimulateResponse
+
     @POST("api/wallet/transfer")
     suspend fun createTransfer(@Body body: TransferRequest): TransferResponse
 
@@ -102,12 +105,16 @@ interface PagwaveApi {
 
     // ── Integrations ─────────────────────────────────────────────────────
     @GET("api/integrations/keys")
-    suspend fun getIntegrations(): IntegrationsResponse
+    suspend fun getIntegrations(@Query("reveal") reveal: Int? = null): IntegrationsResponse
+
+    @POST("api/integrations/keys")
+    suspend fun integrationKeyAction(@Body body: IntegrationKeyActionRequest): IntegrationKeyActionResponse
 }
 
 private class TokenRefreshAuthenticator(
     private val baseUrl: String,
     private val cookieJar: PersistentCookieJar,
+    private val onSessionInvalidated: () -> Unit,
 ) : Authenticator {
     private val lock = Any()
 
@@ -121,6 +128,8 @@ private class TokenRefreshAuthenticator(
         }
 
         if (response.priorResponse != null) {
+            cookieJar.clear()
+            onSessionInvalidated()
             return null
         }
 
@@ -142,6 +151,7 @@ private class TokenRefreshAuthenticator(
 
             if (!refreshed) {
                 cookieJar.clear()
+                onSessionInvalidated()
                 return null
             }
 
@@ -155,6 +165,9 @@ private class TokenRefreshAuthenticator(
 class PagwaveApiClient(context: Context) {
     val cookieJar = PersistentCookieJar(context)
 
+    @Volatile
+    var onSessionExpired: (() -> Unit)? = null
+
     val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -165,7 +178,11 @@ class PagwaveApiClient(context: Context) {
 
     private val okHttp: OkHttpClient = OkHttpClient.Builder()
         .cookieJar(cookieJar)
-        .authenticator(TokenRefreshAuthenticator(baseUrl, cookieJar))
+        .authenticator(
+            TokenRefreshAuthenticator(baseUrl, cookieJar) {
+                onSessionExpired?.invoke()
+            },
+        )
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
         .writeTimeout(25, TimeUnit.SECONDS)
