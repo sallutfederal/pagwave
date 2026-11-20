@@ -70,19 +70,7 @@ function SummaryTile({
 }) {
   return (
     <Card className="flex items-center gap-4 p-5">
-      <span
-        className={cn(
-          "relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]",
-          tone === "in" &&
-            "border-emerald-500/30 bg-gradient-to-br from-emerald-500/18 via-emerald-500/8 to-transparent text-emerald-400",
-          tone === "out" &&
-            "border-rose-500/30 bg-gradient-to-br from-rose-500/18 via-rose-500/8 to-transparent text-rose-400",
-          tone === "net" &&
-            "border-amber-400/30 bg-gradient-to-br from-amber-400/16 via-amber-500/6 to-transparent text-foreground",
-          tone === "neutral" &&
-            "border-line bg-gradient-to-br from-white/8 via-surface-subtle to-transparent text-foreground",
-        )}
-      >
+      <span className="border-line bg-gradient-to-br from-foreground/[0.08] via-surface-subtle to-transparent text-foreground relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
         <TransactionKpiIcon kind={tone} />
       </span>
       <div className="min-w-0">
