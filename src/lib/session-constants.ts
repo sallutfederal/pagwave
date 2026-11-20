@@ -27,7 +27,6 @@ export const PROTECTED_PREFIXES = [
   "/wallet",
   "/cards",
   "/transactions",
-  "/docs",
   "/integrations",
   "/settings",
   "/admin",

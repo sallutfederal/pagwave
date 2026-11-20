@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { BookOpen, Check, Copy, Eye, EyeOff, KeyRound, Play, RefreshCw, Save, ShieldCheck, Webhook } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, KeyRound, Play, RefreshCw, Save, Webhook } from "lucide-react";
 import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -86,7 +86,6 @@ export function IntegrationsView() {
   const { modules } = useI18n();
   const mi = modules.integrations;
   const [loading, setLoading] = useState(true);
-  const [isSandbox, setIsSandbox] = useState(true);
   const [credential, setCredential] = useState<CredentialData | null>(null);
   const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
   const [logs, setLogs] = useState<ApiLogData[]>([]);
@@ -119,7 +118,6 @@ export function IntegrationsView() {
       const res = await fetch("/api/integrations/keys", { cache: "no-store" });
       const json = (await res.json().catch(() => null)) as {
         ok?: boolean;
-        isSandbox?: boolean;
         credential?: CredentialData;
         logs?: ApiLogData[];
         message?: string;
@@ -127,7 +125,6 @@ export function IntegrationsView() {
 
       if (cancelled) return;
       if (res.ok && json?.ok && json.credential) {
-        setIsSandbox(Boolean(json.isSandbox));
         setCredential(json.credential);
         setLabelInput(json.credential.label);
         setWebhookInput(json.credential.webhookUrl);
@@ -275,43 +272,6 @@ export function IntegrationsView() {
 
   return (
     <div className="space-y-6">
-      {/* Top Architecture Banner + Docs Link */}
-      <Card className="flex flex-wrap items-center justify-between gap-4 border-accent/25 bg-surface p-5">
-        <div className="max-w-2xl space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="bg-accent-soft text-accent inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold">
-              <ShieldCheck className="size-3.5" />
-              Chaves exclusivas por conta
-            </span>
-            {isSandbox ? (
-              <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-medium text-amber-300">
-                Upstream Sandbox ativo
-              </span>
-            ) : (
-              <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-300">
-                Produção ativa
-              </span>
-            )}
-          </div>
-          <h2 className="text-foreground text-sm font-semibold">
-            Fluxo da API Pagwave: Sua Key → Autenticação Pagwave → Roteamento Multi-moeda
-          </h2>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Suas aplicações enviam <code className="text-foreground">X-Client-Id</code> e{" "}
-            <code className="text-foreground">X-Client-Secret</code> exclusivos desta conta para{" "}
-            <code className="text-foreground">{baseOrigin}/api/v1</code>. Validamos sua chave e roteamos a cobrança ou saque na hora na moeda desejada.
-          </p>
-        </div>
-
-        <Link
-          href="/docs"
-          className="bg-accent text-accent-fg hover:bg-accent/90 inline-flex h-10 shrink-0 items-center gap-2 rounded-full px-5 text-xs font-semibold transition-colors"
-        >
-          <BookOpen className="size-4" />
-          {mi.docsLink} (/docs)
-        </Link>
-      </Card>
-
       {errorMsg ? (
         <Card className="border-red-500/30 bg-red-500/10 p-4 text-xs text-red-200">
           {errorMsg}
@@ -571,7 +531,7 @@ export function IntegrationsView() {
         {logs.length === 0 ? (
           <p className="text-muted-foreground py-6 text-center text-xs">
             Nenhuma chamada registrada ainda. Execute o teste ao vivo acima ou integre seguindo{" "}
-            <Link href="/docs" className="text-accent underline">
+            <Link href="/docs" target="_blank" rel="noopener noreferrer" className="text-accent underline">
               /docs
             </Link>
             .
