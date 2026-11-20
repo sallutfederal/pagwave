@@ -9,6 +9,9 @@ import {
   withdrawalSchema,
 } from "./wallet.schema.js";
 import {
+  getUserEffectiveFeesOverview,
+} from "../../lib/fees.js";
+import {
   createDeposit,
   createWallet,
   createWithdrawal,
@@ -26,6 +29,12 @@ export async function walletRoutes(app: FastifyInstance) {
   app.get("/", async (request) => {
     const user = request.user as { id: string };
     return getUserWallets(user.id);
+  });
+
+  // ─── GET /wallets/fees ─────────────────────────────────────────────────
+  app.get("/fees", async (request) => {
+    const user = request.user as { id: string };
+    return getUserEffectiveFeesOverview(user.id);
   });
 
   // ─── GET /wallets/:id ──────────────────────────────────────────────────

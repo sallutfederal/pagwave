@@ -8,11 +8,13 @@ import { useI18n } from "@/components/locale-provider";
 type SectionKey =
   | "wallet"
   | "cards"
+  | "fees"
   | "integrations"
   | "docs"
   | "adminOverview"
   | "adminUsers"
   | "adminTransactions"
+  | "adminFees"
   | "adminIntegrations"
   | "adminSettings";
 
@@ -30,6 +32,7 @@ export function LocalizedPageHeader({
   const content: Record<SectionKey, { title: string; description?: string }> = {
     wallet: { title: messages.wallet.title, description: messages.wallet.description },
     cards: { title: messages.pages.cardsTitle, description: messages.pages.cardsDesc },
+    fees: { title: messages.pages.feesTitle, description: messages.pages.feesDesc },
     integrations: {
       title: messages.pages.integrationsTitle,
       description: messages.pages.integrationsDesc,
@@ -38,6 +41,7 @@ export function LocalizedPageHeader({
     adminOverview: { title: messages.pages.adminTitle },
     adminUsers: { title: messages.pages.adminUsersTitle },
     adminTransactions: { title: messages.pages.adminTransactionsTitle },
+    adminFees: { title: messages.pages.adminFeesTitle },
     adminIntegrations: { title: messages.pages.adminIntegrationsTitle },
     adminSettings: { title: messages.pages.adminSettingsTitle },
   };

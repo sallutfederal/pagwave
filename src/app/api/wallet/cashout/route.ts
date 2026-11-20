@@ -79,8 +79,8 @@ export function POST(request: Request) {
     const origin = request.headers.get("origin") ?? undefined;
     const webhookUrl = resolveWebhookUrl(origin);
 
-    // Reserve user's ledger balance and enforce KYC/daily/monthly limits before calling XPAG.
-    await reserveCashoutInLedger({
+    // Reserve user's ledger balance, enforce KYC/daily/monthly limits, and compute effective withdrawal fee.
+    const reserved = await reserveCashoutInLedger({
       userId,
       currency,
       amount: normalizedAmount,
@@ -89,10 +89,15 @@ export function POST(request: Request) {
       description,
     });
 
+    const payoutAmount =
+      currency === "CLP"
+        ? Math.max(1, Math.round(reserved.netAmount))
+        : Number(reserved.netAmount.toFixed(2));
+
     const payload = buildCashoutPayload({
       currency,
       rail,
-      amount: normalizedAmount,
+      amount: payoutAmount,
       externalId,
       webhookUrl,
       description,
@@ -126,6 +131,12 @@ export function POST(request: Request) {
       metadata: result,
     });
 
-    return { ok: true, externalId, result };
+    return {
+      ok: true,
+      externalId,
+      fee: reserved.fee,
+      netAmount: payoutAmount,
+      result,
+    };
   });
 }

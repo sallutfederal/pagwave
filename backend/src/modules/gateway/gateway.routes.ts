@@ -5,7 +5,8 @@ import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
 import { env } from "../../config/env.js";
-import { calculateFee, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
+import { decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
+import { computeEffectiveFee, resolveEffectiveFeeForUser } from "../../lib/fees.js";
 import { BadRequestError, InsufficientFundsError, NotFoundError } from "../../lib/errors.js";
 import { generateTxRef } from "../../lib/id.js";
 import { dispatchUserNotification } from "../../lib/notifications.js";
@@ -109,9 +110,10 @@ async function settleActivityInLedger(
     const isSelfDeposit = metaObj?.purpose === "self_deposit";
 
     const gross = new Decimal(grossNum);
-    // Keep fee calculation consistent with platform feeBps (self deposits use 0 only if feeBps is 0).
-    const fee = gross.mul(opts.feeBps).div(10_000);
-    const net = gross.sub(fee);
+    const feeRule = await resolveEffectiveFeeForUser(act.userId, "DEPOSIT", act.currency, tx);
+    const { fee: computedFee, netAmount: computedNet } = computeEffectiveFee(gross, feeRule);
+    const fee = computedNet.lte(0) ? decimalZero() : computedFee;
+    const net = decimalSub(gross, fee);
 
     await tx.wallet.update({
       where: { id: wallet.id },
@@ -822,18 +824,11 @@ export async function gatewayRoutes(app: FastifyInstance) {
     const amount = toDecimal(body.amount);
     await assertWithdrawalLimits(body.userId, body.currency, amount);
 
-    const feeConfig = await prisma.feeConfig.findUnique({
-      where: {
-        transactionType_currencyCode: {
-          transactionType: "WITHDRAWAL",
-          currencyCode: body.currency,
-        },
-      },
-    });
-    const fee = feeConfig
-      ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
-      : decimalZero();
-    const netAmount = decimalSub(amount, fee);
+    const feeRule = await resolveEffectiveFeeForUser(body.userId, "WITHDRAWAL", body.currency);
+    const { fee, netAmount } = computeEffectiveFee(amount, feeRule);
+    if (netAmount.lte(0)) {
+      throw new BadRequestError("O valor líquido do saque após taxas deve ser maior que zero.");
+    }
     const refId = generateTxRef();
 
     const reserved = await prisma.$transaction(async (tx) => {
@@ -872,7 +867,12 @@ export async function gatewayRoutes(app: FastifyInstance) {
         },
       });
 
-      return { txId: txRow.id, referenceId: refId };
+      return {
+        txId: txRow.id,
+        referenceId: refId,
+        fee: Number(fee),
+        netAmount: Number(netAmount),
+      };
     });
 
     return { ok: true, ...reserved };

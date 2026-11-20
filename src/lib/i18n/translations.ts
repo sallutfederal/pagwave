@@ -5,11 +5,13 @@ export type AppMessages = {
     dashboard: string;
     wallet: string;
     transactions: string;
+    fees: string;
     integrations: string;
     adminGroup: string;
     adminOverview: string;
     adminUsers: string;
     adminTransactions: string;
+    adminFees: string;
     adminIntegrations: string;
     adminSettings: string;
     logout: string;
@@ -156,6 +158,8 @@ export type AppMessages = {
   pages: {
     integrationsTitle: string;
     integrationsDesc: string;
+    feesTitle: string;
+    feesDesc: string;
     settingsTitle: string;
     settingsDesc: string;
     docsTitle: string;
@@ -169,6 +173,7 @@ export type AppMessages = {
     adminTitle: string;
     adminUsersTitle: string;
     adminTransactionsTitle: string;
+    adminFeesTitle: string;
     adminIntegrationsTitle: string;
     adminSettingsTitle: string;
   };
@@ -190,11 +195,13 @@ const pt: AppMessages = {
     dashboard: "Painel",
     wallet: "Carteira",
     transactions: "Transações",
+    fees: "Taxas",
     integrations: "Integrações",
     adminGroup: "Admin",
     adminOverview: "Visão Geral",
     adminUsers: "Usuários & KYC",
     adminTransactions: "Transações & MED",
+    adminFees: "Taxas & Saques",
     adminIntegrations: "API Keys & Webhooks",
     adminSettings: "Configurações & Moedas",
     logout: "Sair",
@@ -353,6 +360,8 @@ const pt: AppMessages = {
   pages: {
     integrationsTitle: "Integrações & API",
     integrationsDesc: "Gere credenciais pagwave, configure webhook de retorno e teste chamadas reais.",
+    feesTitle: "Taxas & Tarifas",
+    feesDesc: "Consulte suas taxas efetivas para saques, depósitos, transferências P2P e conversões.",
     settingsTitle: "Configurações",
     settingsDesc: "Perfil da conta, verificação KYC, segurança e preferências.",
     docsTitle: "Documentação da API",
@@ -366,6 +375,7 @@ const pt: AppMessages = {
     adminTitle: "Admin · Visão Geral",
     adminUsersTitle: "Admin · Usuários & KYC",
     adminTransactionsTitle: "Admin · Transações & MED",
+    adminFeesTitle: "Admin · Taxas & Saques",
     adminIntegrationsTitle: "Admin · API Keys & Webhooks",
     adminSettingsTitle: "Admin · Configurações & Moedas",
   },
@@ -387,11 +397,13 @@ const en: AppMessages = {
     dashboard: "Dashboard",
     wallet: "Wallet",
     transactions: "Transactions",
+    fees: "Fees",
     integrations: "Integrations",
     adminGroup: "Admin",
     adminOverview: "Overview",
     adminUsers: "Users & KYC",
     adminTransactions: "Transactions & MED",
+    adminFees: "Fees & Withdrawals",
     adminIntegrations: "API Keys & Webhooks",
     adminSettings: "Settings & Currencies",
     logout: "Sign out",
@@ -550,6 +562,8 @@ const en: AppMessages = {
   pages: {
     integrationsTitle: "Integrations & API",
     integrationsDesc: "Generate PagWave credentials, configure webhook URLs and test live requests.",
+    feesTitle: "Fees & Rates",
+    feesDesc: "View your effective rates for withdrawals, deposits, P2P transfers and currency conversions.",
     settingsTitle: "Settings",
     settingsDesc: "Account profile, KYC verification, security and preferences.",
     docsTitle: "API Documentation",
@@ -563,6 +577,7 @@ const en: AppMessages = {
     adminTitle: "Admin · Overview",
     adminUsersTitle: "Admin · Users & KYC",
     adminTransactionsTitle: "Admin · Transactions & MED",
+    adminFeesTitle: "Admin · Fees & Withdrawals",
     adminIntegrationsTitle: "Admin · API Keys & Webhooks",
     adminSettingsTitle: "Admin · Settings & Currencies",
   },
@@ -584,11 +599,13 @@ const es: AppMessages = {
     dashboard: "Panel",
     wallet: "Billetera",
     transactions: "Transacciones",
+    fees: "Comisiones",
     integrations: "Integraciones",
     adminGroup: "Admin",
     adminOverview: "Resumen",
     adminUsers: "Usuarios y KYC",
     adminTransactions: "Transacciones y MED",
+    adminFees: "Comisiones y Retiros",
     adminIntegrations: "API Keys y Webhooks",
     adminSettings: "Configuración y Monedas",
     logout: "Cerrar sesión",
@@ -747,6 +764,8 @@ const es: AppMessages = {
   pages: {
     integrationsTitle: "Integraciones y API",
     integrationsDesc: "Genera credenciales pagwave, configura webhooks y prueba solicitudes.",
+    feesTitle: "Comisiones y Tarifas",
+    feesDesc: "Consulta tus tarifas vigentes para retiros, depósitos, transferencias P2P y conversiones.",
     settingsTitle: "Configuración",
     settingsDesc: "Perfil de cuenta, verificación KYC, seguridad y preferencias.",
     docsTitle: "Documentación de la API",
@@ -760,6 +779,7 @@ const es: AppMessages = {
     adminTitle: "Admin · Resumen",
     adminUsersTitle: "Admin · Usuarios y KYC",
     adminTransactionsTitle: "Admin · Transacciones y MED",
+    adminFeesTitle: "Admin · Comisiones y Retiros",
     adminIntegrationsTitle: "Admin · API Keys y Webhooks",
     adminSettingsTitle: "Admin · Configuración y Monedas",
   },
@@ -781,11 +801,13 @@ const ar: AppMessages = {
     dashboard: "لوحة التحكم",
     wallet: "المحفظة",
     transactions: "المعاملات",
+    fees: "الرسوم",
     integrations: "التكاملات",
     adminGroup: "الإدارة",
     adminOverview: "نظرة عامة",
     adminUsers: "المستخدمون وKYC",
     adminTransactions: "المعاملات وMED",
+    adminFees: "الرسوم والسحب",
     adminIntegrations: "مفاتيح API وWebhooks",
     adminSettings: "الإعدادات والعملات",
     logout: "تسجيل الخروج",
@@ -944,6 +966,8 @@ const ar: AppMessages = {
   pages: {
     integrationsTitle: "التكاملات وAPI",
     integrationsDesc: "أنشئ مفاتيح الربط واضبط روابط Webhook واختبر الطلبات الحية.",
+    feesTitle: "الرسوم والتعريفات",
+    feesDesc: "اطّلع على الرسوم الفعلية لحسابك في عمليات السحب والإيداع والتحويل والصرف.",
     settingsTitle: "الإعدادات",
     settingsDesc: "ملف الحساب، التحقق KYC، الأمان والتفضيلات.",
     docsTitle: "وثائق API",
@@ -957,6 +981,7 @@ const ar: AppMessages = {
     adminTitle: "الإدارة · نظرة عامة",
     adminUsersTitle: "الإدارة · المستخدمون وKYC",
     adminTransactionsTitle: "الإدارة · المعاملات وMED",
+    adminFeesTitle: "الإدارة · الرسوم والسحب",
     adminIntegrationsTitle: "الإدارة · مفاتيح API وWebhooks",
     adminSettingsTitle: "الإدارة · الإعدادات والعملات",
   },
@@ -978,11 +1003,13 @@ const fr: AppMessages = {
     dashboard: "Tableau de bord",
     wallet: "Portefeuille",
     transactions: "Transactions",
+    fees: "Frais",
     integrations: "Intégrations",
     adminGroup: "Admin",
     adminOverview: "Vue d'ensemble",
     adminUsers: "Utilisateurs & KYC",
     adminTransactions: "Transactions & MED",
+    adminFees: "Frais & Retraits",
     adminIntegrations: "Clés API & Webhooks",
     adminSettings: "Paramètres & Devises",
     logout: "Déconnexion",
@@ -1141,6 +1168,8 @@ const fr: AppMessages = {
   pages: {
     integrationsTitle: "Intégrations & API",
     integrationsDesc: "Générez vos identifiants PagWave, configurez les webhooks et testez l'API.",
+    feesTitle: "Frais & Tarifs",
+    feesDesc: "Consultez vos frais réels pour les retraits, dépôts, transferts P2P et conversions.",
     settingsTitle: "Paramètres",
     settingsDesc: "Profil du compte, vérification KYC, sécurité et préférences.",
     docsTitle: "Documentation API",
@@ -1154,6 +1183,7 @@ const fr: AppMessages = {
     adminTitle: "Admin · Vue d'ensemble",
     adminUsersTitle: "Admin · Utilisateurs & KYC",
     adminTransactionsTitle: "Admin · Transactions & MED",
+    adminFeesTitle: "Admin · Frais & Retraits",
     adminIntegrationsTitle: "Admin · Clés API & Webhooks",
     adminSettingsTitle: "Admin · Paramètres & Devises",
   },
@@ -1175,11 +1205,13 @@ const de: AppMessages = {
     dashboard: "Übersicht",
     wallet: "Wallet",
     transactions: "Transaktionen",
+    fees: "Gebühren",
     integrations: "Integrationen",
     adminGroup: "Admin",
     adminOverview: "Überblick",
     adminUsers: "Nutzer & KYC",
     adminTransactions: "Transaktionen & MED",
+    adminFees: "Gebühren & Auszahlungen",
     adminIntegrations: "API-Keys & Webhooks",
     adminSettings: "Einstellungen & Währungen",
     logout: "Abmelden",
@@ -1338,6 +1370,8 @@ const de: AppMessages = {
   pages: {
     integrationsTitle: "Integrationen & API",
     integrationsDesc: "PagWave-Zugangsdaten erstellen, Webhooks konfigurieren und Anfragen testen.",
+    feesTitle: "Gebühren & Tarife",
+    feesDesc: "Sehen Sie Ihre gültigen Gebühren für Auszahlungen, Einzahlungen, P2P-Transfers und Währungswechsel.",
     settingsTitle: "Einstellungen",
     settingsDesc: "Kontoprofil, KYC-Prüfung, Sicherheit und Benachrichtigungen.",
     docsTitle: "API-Dokumentation",
@@ -1351,6 +1385,7 @@ const de: AppMessages = {
     adminTitle: "Admin · Überblick",
     adminUsersTitle: "Admin · Nutzer & KYC",
     adminTransactionsTitle: "Admin · Transaktionen & MED",
+    adminFeesTitle: "Admin · Gebühren & Auszahlungen",
     adminIntegrationsTitle: "Admin · API-Keys & Webhooks",
     adminSettingsTitle: "Admin · Einstellungen & Währungen",
   },

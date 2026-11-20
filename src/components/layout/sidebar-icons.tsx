@@ -150,6 +150,21 @@ export function SidebarNavIcon({ href, active = false, className }: IconProps) {
         </svg>
       );
 
+    case "/fees":
+    case "/admin/fees":
+      return (
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden className={base}>
+          <path
+            d="M17.5 6.5 6.5 17.5"
+            stroke="currentColor"
+            strokeWidth={sw}
+            strokeLinecap="round"
+          />
+          <circle cx="8" cy="8" r="2.25" stroke="currentColor" strokeWidth={sw} />
+          <circle cx="16" cy="16" r="2.25" stroke="currentColor" strokeWidth={sw} />
+        </svg>
+      );
+
     default:
       return (
         <svg viewBox="0 0 24 24" fill="none" aria-hidden className={base}>

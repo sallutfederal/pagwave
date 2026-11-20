@@ -1,7 +1,8 @@
 import { Decimal } from "@prisma/client/runtime/library";
 
 import { prisma } from "../../config/database.js";
-import { calculateFee, decimalAdd, decimalGte, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
+import { decimalAdd, decimalGte, decimalSub, decimalZero, toDecimal } from "../../lib/decimal.js";
+import { computeEffectiveFee, resolveEffectiveFeeForUser } from "../../lib/fees.js";
 import {
   BadRequestError,
   ConflictError,
@@ -241,22 +242,12 @@ export async function internalTransfer(userId: string, input: TransferInput) {
     throw new BadRequestError("Informe o e-mail do usuário PagWave ou a carteira de destino.");
   }
 
-  // Get fee config (0 by default if no TRANSFER_OUT rule is configured)
-  const feeConfig = await prisma.feeConfig.findUnique({
-    where: {
-      transactionType_currencyCode: {
-        transactionType: "TRANSFER_OUT",
-        currencyCode: fromWallet.currency.code,
-      },
-    },
-  });
-
-  const fee =
-    feeConfig && feeConfig.isActive
-      ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
-      : decimalZero();
-
-  const netAmount = decimalSub(amount, fee);
+  // Get effective fee (per-user custom override first, then global FeeConfig)
+  const feeRule = await resolveEffectiveFeeForUser(userId, "TRANSFER_OUT", fromWallet.currency.code);
+  const { fee, netAmount } = computeEffectiveFee(amount, feeRule);
+  if (netAmount.lte(0)) {
+    throw new BadRequestError("O valor líquido após a taxa de transferência deve ser maior que zero.");
+  }
   const refId = generateTxRef();
   const senderLabel =
     senderUser?.profile?.displayName ||
@@ -690,21 +681,12 @@ export async function createWithdrawal(userId: string, input: WithdrawalInput) {
     throw new InsufficientFundsError();
   }
 
-  // Get fee
-  const feeConfig = await prisma.feeConfig.findUnique({
-    where: {
-      transactionType_currencyCode: {
-        transactionType: "WITHDRAWAL",
-        currencyCode: wallet.currency.code,
-      },
-    },
-  });
-
-  const fee = feeConfig
-    ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
-    : decimalZero();
-
-  const netAmount = decimalSub(amount, fee);
+  // Get effective withdrawal fee (per-user override first, then global FeeConfig)
+  const feeRule = await resolveEffectiveFeeForUser(userId, "WITHDRAWAL", wallet.currency.code);
+  const { fee, netAmount } = computeEffectiveFee(amount, feeRule);
+  if (netAmount.lte(0)) {
+    throw new BadRequestError("O valor líquido após a taxa de saque deve ser maior que zero.");
+  }
   const refId = generateTxRef();
 
   // Freeze the amount atomically (guarded against concurrent overdraft)
@@ -828,23 +810,15 @@ export async function exchangeCurrency(userId: string, input: ExchangeInput) {
   }
 
   const exchangeRate = rate.rate;
-  const toAmount = amount.mul(exchangeRate);
 
-  // Fee
-  const feeConfig = await prisma.feeConfig.findUnique({
-    where: {
-      transactionType_currencyCode: {
-        transactionType: "EXCHANGE",
-        currencyCode: fromWallet.currency.code,
-      },
-    },
-  });
+  // Effective exchange fee (per-user override first, then global FeeConfig)
+  const feeRule = await resolveEffectiveFeeForUser(userId, "EXCHANGE", fromWallet.currency.code);
+  const { fee, netAmount } = computeEffectiveFee(amount, feeRule);
+  if (netAmount.lte(0)) {
+    throw new BadRequestError("O valor líquido após a taxa de conversão deve ser maior que zero.");
+  }
 
-  const fee = feeConfig
-    ? calculateFee(amount, feeConfig.flatFee, feeConfig.percentFee, feeConfig.minFee, feeConfig.maxFee)
-    : decimalZero();
-
-  const netAmount = decimalSub(amount, fee);
+  const toAmount = netAmount.mul(exchangeRate);
   const refId = generateTxRef();
 
   await prisma.$transaction([

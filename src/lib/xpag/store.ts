@@ -565,7 +565,13 @@ export async function reserveCashoutInLedger(input: {
   rail?: string;
   description?: string;
 }) {
-  return gatewayStrict<{ ok: boolean; txId: string; referenceId: string }>(
+  return gatewayStrict<{
+    ok: boolean;
+    txId: string;
+    referenceId: string;
+    fee: number;
+    netAmount: number;
+  }>(
     "/ledger/reserve-cashout",
     {
       method: "POST",

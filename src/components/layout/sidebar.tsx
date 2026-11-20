@@ -26,6 +26,8 @@ function localizedNavLabel(href: string, fallback: string, messages: AppMessages
       return messages.nav.wallet;
     case "/transactions":
       return messages.nav.transactions;
+    case "/fees":
+      return messages.nav.fees;
     case "/integrations":
       return messages.nav.integrations;
     case "/admin":
@@ -34,6 +36,8 @@ function localizedNavLabel(href: string, fallback: string, messages: AppMessages
       return messages.nav.adminUsers;
     case "/admin/transactions":
       return messages.nav.adminTransactions;
+    case "/admin/fees":
+      return messages.nav.adminFees;
     case "/admin/integrations":
       return messages.nav.adminIntegrations;
     case "/admin/settings":

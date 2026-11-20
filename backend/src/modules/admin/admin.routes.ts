@@ -3,6 +3,14 @@ import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
 import { BadRequestError, NotFoundError } from "../../lib/errors.js";
+import {
+  FEE_TRANSACTION_TYPES,
+  SUPPORTED_FEE_CURRENCIES,
+  getAllUsersFeeOverridesMap,
+  getUserFeeOverrides,
+  normalizeFeeCurrency,
+  setUserFeeOverrides,
+} from "../../lib/fees.js";
 import { adminGuard } from "../../middleware/auth.js";
 import { dispatchUserNotification } from "../../lib/notifications.js";
 import { confirmDeposit, rejectDeposit } from "../wallets/wallet.service.js";
@@ -22,10 +30,27 @@ const reviewKycSchema = z.object({
 
 const updateFeeSchema = z.object({
   transactionType: z.enum(["DEPOSIT", "WITHDRAWAL", "TRANSFER_IN", "TRANSFER_OUT", "EXCHANGE"]),
-  currencyCode: z.string().trim().min(2).max(10),
+  currencyCode: z.string().trim().min(1).max(10),
   flatFee: z.coerce.number().min(0),
   percentFee: z.coerce.number().min(0).max(1),
+  minFee: z.coerce.number().min(0).optional(),
+  maxFee: z.coerce.number().min(0).nullable().optional(),
   isActive: z.boolean().optional(),
+});
+
+const userFeeRuleSchema = z.object({
+  transactionType: z.enum(FEE_TRANSACTION_TYPES),
+  currencyCode: z.string().trim().min(1).max(10),
+  flatFee: z.coerce.number().min(0),
+  percentFee: z.coerce.number().min(0).max(1),
+  minFee: z.coerce.number().min(0).default(0),
+  maxFee: z.coerce.number().min(0).nullable().optional(),
+  isActive: z.boolean().default(true),
+});
+
+const putUserFeeOverridesSchema = z.object({
+  rules: z.array(userFeeRuleSchema).max(60),
+  note: z.string().trim().max(240).optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -257,33 +282,107 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get("/fees", async () => {
-    const fees = await prisma.feeConfig.findMany({
-      orderBy: [{ currencyCode: "asc" }, { transactionType: "asc" }],
-    });
-    return { fees };
+    const [fees, settings, dbCurrencies, users, overridesMap] = await Promise.all([
+      prisma.feeConfig.findMany({
+        orderBy: [{ currencyCode: "asc" }, { transactionType: "asc" }],
+      }),
+      prisma.platformSetting.upsert({
+        where: { id: "default" },
+        update: {},
+        create: { id: "default" },
+      }),
+      prisma.currency.findMany({
+        where: { isActive: true },
+        select: { code: true, name: true, symbol: true, decimals: true, type: true },
+        orderBy: { code: "asc" },
+      }),
+      prisma.user.findMany({
+        include: {
+          profile: {
+            select: {
+              displayName: true,
+              firstName: true,
+              lastName: true,
+              kycStatus: true,
+              kycLevel: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }),
+      getAllUsersFeeOverridesMap(),
+    ]);
+
+    const currencyCodes: string[] = [...SUPPORTED_FEE_CURRENCIES];
+    for (const c of dbCurrencies) {
+      const upper = c.code.toUpperCase();
+      if (!currencyCodes.includes(upper)) currencyCodes.push(upper);
+    }
+
+    return {
+      fees: fees.map((f) => ({
+        id: f.id,
+        transactionType: f.transactionType,
+        currencyCode: f.currencyCode,
+        flatFee: Number(f.flatFee),
+        percentFee: Number(f.percentFee),
+        minFee: Number(f.minFee),
+        maxFee: f.maxFee !== null ? Number(f.maxFee) : null,
+        isActive: f.isActive,
+        updatedAt: f.updatedAt.toISOString(),
+      })),
+      platformFeeBps: settings.feeBps,
+      currencies: currencyCodes,
+      userOverrides: users.map((u) => {
+        const override = overridesMap.get(u.id);
+        return {
+          userId: u.id,
+          email: u.email,
+          name:
+            u.profile?.displayName ||
+            `${u.profile?.firstName ?? ""} ${u.profile?.lastName ?? ""}`.trim() ||
+            u.email,
+          role: u.role,
+          status: u.status,
+          kycStatus: u.profile?.kycStatus ?? "NOT_STARTED",
+          kycLevel: u.profile?.kycLevel ?? 0,
+          rules: override?.rules ?? [],
+          note: override?.note ?? "",
+          updatedAt: override?.updatedAt ?? null,
+        };
+      }),
+    };
   });
 
   app.patch("/fees", async (request) => {
     const admin = request.user as { id: string };
     const body = updateFeeSchema.parse(request.body);
+    const currencyCode = normalizeFeeCurrency(body.currencyCode);
+    if (!currencyCode) {
+      throw new BadRequestError("Moeda inválida.");
+    }
 
     const fee = await prisma.feeConfig.upsert({
       where: {
         transactionType_currencyCode: {
           transactionType: body.transactionType,
-          currencyCode: body.currencyCode.toUpperCase(),
+          currencyCode,
         },
       },
       update: {
         flatFee: body.flatFee,
         percentFee: body.percentFee,
+        minFee: body.minFee ?? 0,
+        maxFee: body.maxFee === undefined ? undefined : body.maxFee,
         isActive: body.isActive ?? true,
       },
       create: {
         transactionType: body.transactionType,
-        currencyCode: body.currencyCode.toUpperCase(),
+        currencyCode,
         flatFee: body.flatFee,
         percentFee: body.percentFee,
+        minFee: body.minFee ?? 0,
+        maxFee: body.maxFee ?? null,
         isActive: body.isActive ?? true,
       },
     });
@@ -298,7 +397,104 @@ export async function adminRoutes(app: FastifyInstance) {
       },
     });
 
-    return { fee };
+    return {
+      fee: {
+        id: fee.id,
+        transactionType: fee.transactionType,
+        currencyCode: fee.currencyCode,
+        flatFee: Number(fee.flatFee),
+        percentFee: Number(fee.percentFee),
+        minFee: Number(fee.minFee),
+        maxFee: fee.maxFee !== null ? Number(fee.maxFee) : null,
+        isActive: fee.isActive,
+        updatedAt: fee.updatedAt.toISOString(),
+      },
+    };
+  });
+
+  app.get("/fees/user/:userId", async (request) => {
+    const { userId } = request.params as { userId: string };
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!user) throw new NotFoundError("User");
+    const override = await getUserFeeOverrides(userId);
+    return { userId, ...override };
+  });
+
+  app.put("/fees/user/:userId", async (request) => {
+    const admin = request.user as { id: string };
+    const { userId } = request.params as { userId: string };
+    const body = putUserFeeOverridesSchema.parse(request.body);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+    if (!user) throw new NotFoundError("User");
+
+    const normalizedRules = body.rules.map((r) => ({
+      transactionType: r.transactionType,
+      currencyCode: normalizeFeeCurrency(r.currencyCode),
+      flatFee: r.flatFee,
+      percentFee: r.percentFee,
+      minFee: r.minFee ?? 0,
+      maxFee: r.maxFee ?? null,
+      isActive: r.isActive ?? true,
+    }));
+
+    const saved = await setUserFeeOverrides(userId, normalizedRules, admin.id, body.note);
+
+    await prisma.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "ADMIN_ACTION",
+        resource: "admin_user_fee_update",
+        resourceId: userId,
+        details: {
+          targetUserId: userId,
+          targetEmail: user.email,
+          ruleCount: saved.rules.length,
+          note: saved.note,
+        },
+      },
+    });
+
+    if (saved.rules.length > 0) {
+      void dispatchUserNotification({
+        userId,
+        category: "securityNotices",
+        type: "SYSTEM",
+        title: "Taxas da conta atualizadas",
+        body: "Um administrador atualizou sua tabela personalizada de taxas (incluindo saques). Consulte a página Taxas.",
+        url: "/fees",
+      });
+    }
+
+    return { ok: true, userId, ...saved };
+  });
+
+  app.delete("/fees/user/:userId", async (request) => {
+    const admin = request.user as { id: string };
+    const { userId } = request.params as { userId: string };
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true },
+    });
+    if (!user) throw new NotFoundError("User");
+
+    const saved = await setUserFeeOverrides(userId, [], admin.id, "Resetado para padrão da plataforma");
+
+    await prisma.auditLog.create({
+      data: {
+        userId: admin.id,
+        action: "ADMIN_ACTION",
+        resource: "admin_user_fee_reset",
+        resourceId: userId,
+        details: { targetUserId: userId, targetEmail: user.email },
+      },
+    });
+
+    return { ok: true, userId, ...saved };
   });
 
   app.post("/deposits/:referenceId/confirm", async (request) => {

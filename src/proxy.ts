@@ -135,13 +135,17 @@ export const config = {
     "/login",
     "/create",
     "/dashboard/:path*",
+    "/wallet/:path*",
     "/cards/:path*",
     "/transactions/:path*",
+    "/fees/:path*",
+    "/integrations/:path*",
     "/settings/:path*",
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/dashboard/:path*",
     "/api/cards/:path*",
+    "/api/fees/:path*",
   ],
 };
 
