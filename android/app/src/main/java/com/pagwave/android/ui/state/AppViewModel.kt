@@ -761,6 +761,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteAccount(password: String) {
+        viewModelScope.launch {
+            repo.securityAction(SecurityActionRequest(action = "delete-account", password = password)).fold(
+                onSuccess = {
+                    pollingJob?.cancel()
+                    pollingJob = null
+                    repo.clearSession()
+                    lastSeenTopNotificationId = null
+                    _state.value = AppUiState(
+                        checkingSession = false,
+                        isAuthenticated = false,
+                        darkTheme = app.uiPrefs.darkTheme,
+                        locale = app.uiPrefs.locale,
+                        authNotice = "Conta encerrada permanentemente.",
+                    )
+                },
+                onFailure = { err -> showBanner(err.message ?: "Não foi possível encerrar a conta.", isError = true) },
+            )
+        }
+    }
+
     private fun postSystemNotification(title: String, body: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(

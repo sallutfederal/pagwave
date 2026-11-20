@@ -1,5 +1,7 @@
 package com.pagwave.android.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,6 +64,7 @@ fun SettingsScreen(
     onSaveIntegrationConfig: (label: String, webhookUrl: String) -> Unit,
     onRotateApiKey: () -> Unit,
     onLogoutAll: () -> Unit,
+    onDeleteAccount: (password: String) -> Unit,
     onLogout: () -> Unit,
 ) {
     val c = PagwaveThemeTokens.colors
@@ -78,6 +81,8 @@ fun SettingsScreen(
     var newPass by remember { mutableStateOf("") }
     var totpCode by remember { mutableStateOf("") }
     var disable2FAPass by remember { mutableStateOf("") }
+    var showDeletePanel by remember { mutableStateOf(false) }
+    var deleteAccountPass by remember { mutableStateOf("") }
 
     var apiLabel by remember(state.integrations.credential) {
         mutableStateOf(state.integrations.credential?.label.orEmpty())
@@ -298,6 +303,31 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     state.twoFactorSetup?.secret?.let { secret ->
+                        val totpUri = state.twoFactorSetup.otpauthUri
+                            ?: state.twoFactorSetup.uri
+                            ?: state.twoFactorSetup.qrCodeUrl
+                            ?: state.twoFactorSetup.otpauthUrl
+                        if (!totpUri.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                PagwaveQrCode(content = totpUri, size = 156.dp)
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            PagwaveOutlineButton(
+                                text = "Abrir no app autenticador",
+                                onClick = {
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(totpUri)))
+                                    }.onFailure {
+                                        Toast.makeText(context, "Copie a chave abaixo para o seu autenticador.", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         Box(
                             modifier = Modifier
@@ -430,20 +460,50 @@ fun SettingsScreen(
             }
         }
 
-        // Session Controls & Logout
+        // Session Controls & Risk Zone
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PagwaveCard {
+                Text("Zona de Risco", color = c.foreground, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PagwaveOutlineButton(
+                        text = "Sair de todos",
+                        onClick = onLogoutAll,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PagwaveOutlineButton(
+                        text = strings.signOut,
+                        onClick = onLogout,
+                        tint = c.danger,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
                 PagwaveOutlineButton(
-                    text = "Encerrar sessões",
-                    onClick = onLogoutAll,
-                    modifier = Modifier.weight(1f),
-                )
-                PagwaveOutlineButton(
-                    text = strings.signOut,
-                    onClick = onLogout,
+                    text = if (showDeletePanel) "Cancelar exclusão" else "Excluir conta permanentemente",
                     tint = c.danger,
-                    modifier = Modifier.weight(1f),
+                    onClick = { showDeletePanel = !showDeletePanel },
+                    modifier = Modifier.fillMaxWidth(),
                 )
+                if (showDeletePanel) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    PagwaveTextField(
+                        value = deleteAccountPass,
+                        onValueChange = { deleteAccountPass = it },
+                        label = "Confirme sua senha atual para encerrar a conta",
+                        visualTransformation = PasswordVisualTransformation(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    PagwavePrimaryButton(
+                        text = "Confirmar encerramento da conta",
+                        onClick = {
+                            if (deleteAccountPass.isNotBlank()) {
+                                onDeleteAccount(deleteAccountPass)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(16.dp))
         }

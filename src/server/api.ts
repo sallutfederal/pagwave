@@ -20,8 +20,19 @@ export async function privateJson(produce: () => Promise<unknown>, init: { statu
     return Response.json(await produce(), { status: init.status ?? 200, headers: PRIVATE_HEADERS });
   } catch (error) {
     if (error instanceof BackendError) {
+      let detailMessage: string | undefined;
+      if (Array.isArray(error.details) && error.details.length > 0) {
+        const first = error.details[0] as { message?: unknown } | undefined;
+        if (typeof first?.message === "string" && first.message.trim()) {
+          detailMessage = first.message;
+        }
+      }
       return Response.json(
-        { error: error.code, message: error.message },
+        {
+          error: error.code,
+          message: detailMessage ?? error.message,
+          details: error.details,
+        },
         { status: error.status, headers: PRIVATE_HEADERS },
       );
     }

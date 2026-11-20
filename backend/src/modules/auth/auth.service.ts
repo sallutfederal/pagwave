@@ -457,10 +457,13 @@ export async function setup2FA(userId: string) {
     data: { twoFactorSecret: secret.base32 },
   });
 
+  const otpauthUri = totp.toString();
+
   return {
     secret: secret.base32,
-    uri: totp.toString(),
-    qrCodeUrl: `otpauth://totp/Pagwave:${user.email}?secret=${secret.base32}&issuer=Pagwave`,
+    uri: otpauthUri,
+    otpauthUri,
+    qrCodeUrl: otpauthUri,
   };
 }
 

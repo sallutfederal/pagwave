@@ -1,9 +1,10 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import { env } from "../config/env.js";
+import { prisma } from "../config/database.js";
 
 /**
- * Verifies the JWT access token from the Authorization header.
- * Attaches `request.user` with { id, email, role } on success.
+ * Verifies the JWT access token from the Authorization header and ensures
+ * the account is active and still holds an active session (so logout-all and
+ * account closure revoke all devices immediately across PC, Android & iOS).
  */
 export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
   try {
@@ -19,12 +20,33 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
       throw new Error("Refresh token used as access token");
     }
 
-    // Attach user to request for downstream handlers
+    const [dbUser, activeSessionCount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: payload.id },
+        select: { status: true },
+      }),
+      prisma.session.count({
+        where: {
+          userId: payload.id,
+          isActive: true,
+          expiresAt: { gt: new Date() },
+        },
+      }),
+    ]);
+
+    if (
+      !dbUser ||
+      ["SUSPENDED", "BLOCKED", "CLOSED"].includes(dbUser.status) ||
+      activeSessionCount === 0
+    ) {
+      throw new Error("Session revoked or account inactive");
+    }
+
     request.user = payload;
-  } catch (err) {
+  } catch {
     reply.status(401).send({
       error: "Unauthorized",
-      message: "Invalid or expired access token.",
+      message: "Invalid, expired, or revoked access token.",
     });
   }
 }
@@ -50,13 +72,10 @@ export async function adminGuard(request: FastifyRequest, reply: FastifyReply) {
  * Checks that the user has completed KYC at the required level.
  */
 export function kycGuard(requiredLevel: number) {
-  return async function (request: FastifyRequest, reply: FastifyReply) {
-    await authGuard(request, reply);
-    if (reply.sent) return;
+  return async function (request: FastifyRequest, _reply: FastifyReply) {
+    await authGuard(request, _reply);
+    if (_reply.sent) return;
 
-    const user = request.user as { id: string };
-    // KYC level is checked at the service layer for actual enforcement
-    // This middleware sets the requirement on the request context
     (request as FastifyRequest & { requiredKycLevel?: number }).requiredKycLevel = requiredLevel;
   };
 }

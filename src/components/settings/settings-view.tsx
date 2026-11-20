@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import {
   BellRing,
   CheckCircle2,
+  Copy,
   ExternalLink,
   FileCheck2,
   KeyRound,
@@ -118,12 +120,14 @@ export function SettingsView() {
   const [kycMsg, setKycMsg] = useState<string | null>(null);
 
   // Security panels
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(user.twoFactorEnabled);
   const [showPwdForm, setShowPwdForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [show2faPanel, setShow2faPanel] = useState(false);
   const [twoFaSecret, setTwoFaSecret] = useState<string | null>(null);
   const [twoFaUri, setTwoFaUri] = useState<string | null>(null);
+  const [twoFaQrDataUrl, setTwoFaQrDataUrl] = useState<string | null>(null);
   const [twoFaCode, setTwoFaCode] = useState("");
   const [disable2faPwd, setDisable2faPwd] = useState("");
   const [showDeleteForm, setShowDeleteForm] = useState(false);
@@ -847,14 +851,14 @@ export function SettingsView() {
 
           <SettingsCard title={modules.settings.securityTitle} description="2FA · Passwords · Sessions">
             {securityMsg ? (
-              <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-xs text-emerald-200">
+              <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-500/35 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-700 dark:text-emerald-200">
                 <CheckCircle2 className="size-4 shrink-0" />
                 {securityMsg}
               </div>
             ) : null}
 
             {securityError ? (
-              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-200">
+              <div className="mb-3 rounded-xl border border-red-500/35 bg-red-500/10 p-3 text-xs font-medium text-red-700 dark:text-red-200">
                 {securityError}
               </div>
             ) : null}
@@ -864,13 +868,13 @@ export function SettingsView() {
                 <ShieldCheck
                   className={cn(
                     "size-5 shrink-0",
-                    user.twoFactorEnabled ? "text-success" : "text-muted-foreground",
+                    twoFactorEnabled ? "text-success" : "text-muted-foreground",
                   )}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-foreground text-sm font-medium">Autenticação em 2 etapas (2FA)</p>
                   <p className="text-muted-foreground text-xs">
-                    {user.twoFactorEnabled ? "App autenticador ativo" : "Não ativado ainda"}
+                    {twoFactorEnabled ? "App autenticador ativo" : "Não ativado ainda"}
                   </p>
                 </div>
                 <Button
@@ -879,21 +883,28 @@ export function SettingsView() {
                   size="sm"
                   onClick={() => {
                     setShow2faPanel((v) => !v);
-                    if (!user.twoFactorEnabled && !twoFaSecret) {
+                    if (!twoFactorEnabled && !twoFaSecret) {
                       void runSecurity({ action: "2fa-setup" }, (res) => {
-                        setTwoFaSecret(String(res.secret || ""));
-                        setTwoFaUri(String(res.otpauthUri || res.qrCodeUrl || ""));
+                        const secret = String(res.secret || "");
+                        const uri = String(res.otpauthUri || res.uri || res.qrCodeUrl || "");
+                        setTwoFaSecret(secret);
+                        setTwoFaUri(uri);
+                        if (uri) {
+                          void QRCode.toDataURL(uri, { width: 220, margin: 1 })
+                            .then((url) => setTwoFaQrDataUrl(url))
+                            .catch(() => setTwoFaQrDataUrl(null));
+                        }
                       });
                     }
                   }}
                 >
-                  {show2faPanel ? "Fechar" : user.twoFactorEnabled ? "Gerenciar" : "Ativar 2FA"}
+                  {show2faPanel ? "Fechar" : twoFactorEnabled ? "Gerenciar" : "Ativar 2FA"}
                 </Button>
               </div>
 
               {show2faPanel ? (
                 <div className="border-line bg-surface-subtle space-y-3 rounded-xl border p-3.5 text-xs">
-                  {user.twoFactorEnabled ? (
+                  {twoFactorEnabled ? (
                     <>
                       <p className="text-muted-foreground">
                         Informe sua senha atual para desativar o 2FA desta conta.
@@ -914,6 +925,10 @@ export function SettingsView() {
                             void runSecurity(
                               { action: "2fa-disable", password: disable2faPwd },
                               () => {
+                                setTwoFactorEnabled(false);
+                                setTwoFaSecret(null);
+                                setTwoFaUri(null);
+                                setTwoFaQrDataUrl(null);
                                 setSecurityMsg("2FA desativado.");
                                 setShow2faPanel(false);
                                 setDisable2faPwd("");
@@ -928,26 +943,59 @@ export function SettingsView() {
                     </>
                   ) : (
                     <>
-                      {twoFaSecret ? (
-                        <div className="space-y-1.5">
-                          <p className="text-muted-foreground">
-                            Adicione esta chave manual ao seu Google Authenticator / Authy:
+                      {twoFaQrDataUrl ? (
+                        <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-surface p-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={twoFaQrDataUrl}
+                            alt="QR Code 2FA"
+                            className="size-40 rounded-lg bg-white p-1.5"
+                          />
+                          <p className="text-muted-foreground text-center text-[11px]">
+                            Escaneie com Google Authenticator, Authy ou Senhas do iPhone/Android.
                           </p>
-                          <p className="text-foreground break-all rounded-lg bg-black/30 p-2 font-mono">
+                        </div>
+                      ) : null}
+
+                      {twoFaSecret ? (
+                        <div className="space-y-2">
+                          <p className="text-muted-foreground">
+                            Ou insira/copie esta chave secreta manualmente:
+                          </p>
+                          <p className="text-foreground break-all rounded-lg border border-line bg-surface p-2 font-mono text-[11px]">
                             {twoFaSecret}
                           </p>
-                          {twoFaUri ? (
-                            <p className="text-muted-foreground break-all font-mono text-[10px]">
-                              {twoFaUri}
-                            </p>
-                          ) : null}
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                void navigator.clipboard?.writeText(twoFaSecret);
+                                setSecurityMsg("Chave secreta 2FA copiada.");
+                              }}
+                            >
+                              <Copy className="size-3.5" />
+                              Copiar chave
+                            </Button>
+                            {twoFaUri ? (
+                              <a
+                                href={twoFaUri}
+                                className="border-line bg-surface text-foreground hover:bg-surface-hover inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors"
+                              >
+                                <ExternalLink className="size-3.5" />
+                                Abrir no app autenticador
+                              </a>
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
                       <div className="flex gap-2">
                         <Input
                           value={twoFaCode}
-                          onChange={(e) => setTwoFaCode(e.target.value)}
+                          onChange={(e) => setTwoFaCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
                           placeholder="Código de 6 dígitos"
+                          inputMode="numeric"
                         />
                         <Button
                           type="button"
@@ -957,6 +1005,7 @@ export function SettingsView() {
                             void runSecurity(
                               { action: "2fa-confirm", code: twoFaCode },
                               () => {
+                                setTwoFactorEnabled(true);
                                 setSecurityMsg("2FA ativado com sucesso.");
                                 setShow2faPanel(false);
                                 setTwoFaCode("");
@@ -1000,6 +1049,9 @@ export function SettingsView() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="Nova senha (mín. 8 caracteres)"
                   />
+                  <p className="text-muted-foreground text-[11px]">
+                    Mínimo 8 caracteres, com 1 letra maiúscula, 1 número e 1 símbolo (ex.: Pagwave@2026).
+                  </p>
                   <Button
                     type="button"
                     size="sm"
@@ -1054,8 +1106,8 @@ export function SettingsView() {
               </Button>
 
               {showDeleteForm ? (
-                <div className="border-red-500/30 bg-red-500/10 space-y-2.5 rounded-xl border p-3.5">
-                  <p className="text-xs text-red-200">
+                <div className="border-red-500/35 bg-red-500/10 space-y-2.5 rounded-xl border p-3.5">
+                  <p className="text-xs font-medium text-red-700 dark:text-red-200">
                     Confirme sua senha para desativar e encerrar esta conta:
                   </p>
                   <Input

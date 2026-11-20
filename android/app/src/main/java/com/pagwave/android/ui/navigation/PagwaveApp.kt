@@ -351,6 +351,7 @@ fun PagwaveApp(viewModel: AppViewModel) {
                                     onSaveIntegrationConfig = viewModel::saveIntegrationConfig,
                                     onRotateApiKey = viewModel::rotateApiKey,
                                     onLogoutAll = viewModel::logoutAllSessions,
+                                    onDeleteAccount = viewModel::deleteAccount,
                                     onLogout = viewModel::logout,
                                 )
                             }

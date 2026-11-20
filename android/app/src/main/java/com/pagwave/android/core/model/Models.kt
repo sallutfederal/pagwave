@@ -114,7 +114,10 @@ data class SecurityActionRequest(
 @Serializable
 data class TwoFactorSetupResponse(
     val secret: String? = null,
+    val uri: String? = null,
+    val otpauthUri: String? = null,
     val otpauthUrl: String? = null,
+    val qrCodeUrl: String? = null,
     val message: String? = null,
 )
 
