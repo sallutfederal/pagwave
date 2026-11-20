@@ -13,10 +13,11 @@ import {
   Receipt,
   RefreshCw,
   Search,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+
+import { TransactionKpiIcon } from "@/components/transactions/kpi-icons";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { useI18n } from "@/components/locale-provider";
@@ -57,13 +58,11 @@ function escapeCsvCell(value: unknown): string {
 }
 
 function SummaryTile({
-  icon,
   label,
   value,
   hint,
   tone,
 }: {
-  icon: React.ReactNode;
   label: string;
   value: string;
   hint: string;
@@ -73,14 +72,18 @@ function SummaryTile({
     <Card className="flex items-center gap-4 p-5">
       <span
         className={cn(
-          "grid size-11 shrink-0 place-items-center rounded-2xl border",
-          tone === "in" && "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
-          tone === "out" && "border-rose-500/25 bg-rose-500/10 text-rose-400",
-          tone === "net" && "border-accent/25 bg-accent-soft text-accent",
-          tone === "neutral" && "border-line bg-surface-subtle text-foreground",
+          "relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-2xl border shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]",
+          tone === "in" &&
+            "border-emerald-500/30 bg-gradient-to-br from-emerald-500/18 via-emerald-500/8 to-transparent text-emerald-400",
+          tone === "out" &&
+            "border-rose-500/30 bg-gradient-to-br from-rose-500/18 via-rose-500/8 to-transparent text-rose-400",
+          tone === "net" &&
+            "border-amber-400/30 bg-gradient-to-br from-amber-400/16 via-amber-500/6 to-transparent text-foreground",
+          tone === "neutral" &&
+            "border-line bg-gradient-to-br from-white/8 via-surface-subtle to-transparent text-foreground",
         )}
       >
-        {icon}
+        <TransactionKpiIcon kind={tone} />
       </span>
       <div className="min-w-0">
         <p className="text-muted-foreground text-xs">{label}</p>
@@ -290,21 +293,18 @@ export function TransactionsView({
       {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile
-          icon={<ArrowDownLeft className="size-5" />}
           label={`${mt.kpiInflow} (USD)`}
           value={formatCurrency({ amount: totalIn, currency: "USD", fractionDigits: 2 })}
           hint={mt.kpiInflowHint}
           tone="in"
         />
         <SummaryTile
-          icon={<ArrowUpRight className="size-5" />}
           label={`${mt.kpiOutflow} (USD)`}
           value={formatCurrency({ amount: totalOut, currency: "USD", fractionDigits: 2 })}
           hint={mt.kpiOutflowHint}
           tone="out"
         />
         <SummaryTile
-          icon={<TrendingUp className="size-5" />}
           label={`${mt.kpiNet} (USD)`}
           value={formatCurrency(
             { amount: netFlow, currency: "USD", fractionDigits: 2 },
@@ -314,7 +314,6 @@ export function TransactionsView({
           tone="net"
         />
         <SummaryTile
-          icon={<Receipt className="size-5" />}
           label={mt.kpiCount}
           value={String(filtered.length)}
           hint={`${filtered.length} ${mt.kpiCountOf} ${transactions.length}`}
