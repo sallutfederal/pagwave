@@ -2,6 +2,9 @@ package com.pagwave.android.data
 
 import com.pagwave.android.core.model.*
 import com.pagwave.android.core.network.PagwaveApiClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.HttpException
 import java.io.IOException
 
@@ -79,6 +82,23 @@ class PagwaveRepository(private val client: PagwaveApiClient) {
     suspend fun securityAction(req: SecurityActionRequest) = guard { api.securityAction(req) }
 
     suspend fun setupTwoFactor() = guard { api.setupTwoFactor(SecurityActionRequest(action = "2fa-setup")) }
+
+    suspend fun fetchKyc() = guard { api.getKycStatus() }
+
+    suspend fun uploadKyc(
+        type: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+        documentNumber: String?,
+    ) = guard {
+        val typeBody = type.toRequestBody("text/plain".toMediaType())
+        val docBody = documentNumber?.trim()?.takeIf { it.isNotBlank() }
+            ?.toRequestBody("text/plain".toMediaType())
+        val fileReq = bytes.toRequestBody(mimeType.toMediaType())
+        val filePart = MultipartBody.Part.createFormData("file", fileName, fileReq)
+        api.uploadKyc(type = typeBody, file = filePart, documentNumber = docBody)
+    }
 
     suspend fun fetchDashboardSummary() = guard { api.getDashboardSummary() }
 

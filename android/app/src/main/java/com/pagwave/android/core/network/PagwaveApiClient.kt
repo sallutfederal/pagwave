@@ -6,8 +6,10 @@ import com.pagwave.android.core.model.*
 import kotlinx.serialization.json.Json
 import okhttp3.Authenticator
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.Route
@@ -17,8 +19,10 @@ import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
@@ -54,6 +58,17 @@ interface PagwaveApi {
 
     @POST("api/auth/security")
     suspend fun setupTwoFactor(@Body body: SecurityActionRequest): TwoFactorSetupResponse
+
+    @GET("api/auth/kyc")
+    suspend fun getKycStatus(): KycStatusResponse
+
+    @Multipart
+    @POST("api/auth/kyc")
+    suspend fun uploadKyc(
+        @Part("type") type: RequestBody,
+        @Part file: MultipartBody.Part,
+        @Part("documentNumber") documentNumber: RequestBody? = null,
+    ): KycUploadResponse
 
     // ── Dashboard ────────────────────────────────────────────────────────
     @GET("api/dashboard/summary")

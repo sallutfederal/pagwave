@@ -23,7 +23,7 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
     const [dbUser, activeSessionCount] = await Promise.all([
       prisma.user.findUnique({
         where: { id: payload.id },
-        select: { status: true },
+        select: { status: true, role: true },
       }),
       prisma.session.count({
         where: {
@@ -42,11 +42,37 @@ export async function authGuard(request: FastifyRequest, reply: FastifyReply) {
       throw new Error("Session revoked or account inactive");
     }
 
-    request.user = payload;
+    request.user = { ...payload, role: dbUser.role };
   } catch {
     reply.status(401).send({
       error: "Unauthorized",
       message: "Invalid, expired, or revoked access token.",
+    });
+  }
+}
+
+/**
+ * Blocks non-admin accounts from accessing financial/system endpoints
+ * until an administrator approves their KYC submission.
+ */
+export async function kycApprovedGuard(request: FastifyRequest, reply: FastifyReply) {
+  await authGuard(request, reply);
+  if (reply.sent) return;
+
+  const user = request.user as { id: string; role: string };
+  if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") {
+    return;
+  }
+
+  const profile = await prisma.userProfile.findUnique({
+    where: { userId: user.id },
+    select: { kycStatus: true },
+  });
+
+  if (profile?.kycStatus !== "APPROVED") {
+    reply.status(403).send({
+      error: "KYC_REQUIRED",
+      message: "Acesso bloqueado: envie seus documentos de KYC e aguarde a aprovação do administrador.",
     });
   }
 }
@@ -73,7 +99,7 @@ export async function adminGuard(request: FastifyRequest, reply: FastifyReply) {
  */
 export function kycGuard(requiredLevel: number) {
   return async function (request: FastifyRequest, _reply: FastifyReply) {
-    await authGuard(request, _reply);
+    await kycApprovedGuard(request, _reply);
     if (_reply.sent) return;
 
     (request as FastifyRequest & { requiredKycLevel?: number }).requiredKycLevel = requiredLevel;

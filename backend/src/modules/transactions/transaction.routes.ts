@@ -3,12 +3,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
-import { authGuard } from "../../middleware/auth.js";
+import { kycApprovedGuard } from "../../middleware/auth.js";
 import { NotFoundError } from "../../lib/errors.js";
 import { getUsdRates } from "../../lib/rates.js";
 
 export async function transactionRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", authGuard);
+  app.addHook("preHandler", kycApprovedGuard);
 
   // ─── GET /transactions ─────────────────────────────────────────────────
   app.get("/", async (request) => {

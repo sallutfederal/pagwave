@@ -7,6 +7,7 @@ import { prisma } from "../../config/database.js";
 import { BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError } from "../../lib/errors.js";
 import { authGuard } from "../../middleware/auth.js";
 import { generateId } from "../../lib/id.js";
+import { dispatchUserNotification } from "../../lib/notifications.js";
 import {
   changePasswordSchema,
   enable2FASchema,
@@ -551,6 +552,23 @@ export async function authRoutes(app: FastifyInstance) {
           details: { type: body.type, fileName: doc.fileName, fileSize: doc.fileSize },
         },
       });
+
+      const admins = await prisma.user.findMany({
+        where: { role: { in: ["ADMIN", "SUPER_ADMIN"] }, status: "ACTIVE" },
+        select: { id: true },
+      });
+      for (const admin of admins) {
+        if (admin.id === user.id) continue;
+        void dispatchUserNotification({
+          userId: admin.id,
+          category: "always",
+          type: "KYC",
+          title: "Novo KYC aguardando aprovação",
+          body: `${user.email} enviou documento (${body.type}) para análise.`,
+          url: "/admin/users",
+          force: true,
+        });
+      }
 
       reply.status(201).send({
         document: {

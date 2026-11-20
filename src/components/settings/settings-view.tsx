@@ -40,6 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { prepareKycFileForUpload } from "@/lib/kyc-upload";
 import {
   detectDeviceInfo,
   getCurrentBrowserPushSubscription,
@@ -371,16 +372,13 @@ export function SettingsView() {
       setProfileError("Selecione um arquivo JPG, PNG, WebP ou PDF para enviar.");
       return;
     }
-    if (kycFile.size > 5 * 1024 * 1024) {
-      setProfileError("O arquivo deve ter no máximo 5 MB.");
-      return;
-    }
 
     setSubmittingKyc(true);
     try {
+      const prepared = await prepareKycFileForUpload(kycFile);
       const form = new FormData();
       form.append("type", kycType);
-      form.append("file", kycFile);
+      form.append("file", prepared);
       if (kycDocNumber.trim()) {
         form.append("documentNumber", kycDocNumber.trim());
       }
@@ -401,6 +399,8 @@ export function SettingsView() {
       if (kycInputRef.current) kycInputRef.current.value = "";
       setKycMsg("Documento enviado com segurança para análise de compliance.");
       router.refresh();
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Falha ao processar documento KYC.");
     } finally {
       setSubmittingKyc(false);
     }

@@ -5,7 +5,12 @@ import android.app.Application
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
+import android.provider.OpenableColumns
+import java.io.ByteArrayOutputStream
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -52,8 +57,14 @@ data class AppUiState(
     val integrations: IntegrationsResponse = IntegrationsResponse(),
     val revealedApiSecret: String? = null,
 
-    // Profile, Security & Notifications
+    // Profile, KYC, Security & Notifications
     val profileEmail: String = "",
+    val userRole: String = "USER",
+    val kycStatus: String = "NOT_STARTED",
+    val kycLevel: Int = 0,
+    val kycDocs: List<KycDocumentDto> = emptyList(),
+    val kycLoaded: Boolean = false,
+    val kycBusy: Boolean = false,
     val twoFactorEnabled: Boolean = false,
     val emailVerified: Boolean = false,
     val profile: UserProfileDto? = null,
@@ -109,13 +120,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _state.update { it.copy(checkingSession = false, isAuthenticated = false) }
                 return@launch
             }
-            val summaryRes = repo.fetchDashboardSummary()
-            if (summaryRes.isSuccess) {
+            val profRes = repo.fetchProfile()
+            if (profRes.isSuccess) {
+                val prof = profRes.getOrThrow()
                 _state.update {
                     it.copy(
                         checkingSession = false,
                         isAuthenticated = true,
-                        summary = summaryRes.getOrThrow(),
+                        profileEmail = prof.email,
+                        userRole = prof.role,
+                        kycStatus = prof.profile?.kycStatus ?: "NOT_STARTED",
+                        kycLevel = prof.profile?.kycLevel ?: 0,
                     )
                 }
                 refreshAll()
@@ -131,15 +146,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (isActive) {
-                delay(25_000)
+                val cur = _state.value
+                val isAdmin = cur.userRole == "ADMIN" || cur.userRole == "SUPER_ADMIN"
+                val kycLocked = !isAdmin && cur.kycStatus != "APPROVED"
+                delay(if (kycLocked) 12_000 else 25_000)
                 if (!_state.value.isAuthenticated) break
-                repo.fetchNotifications().onSuccess { notif ->
-                    handleIncomingNotifications(notif)
-                    _state.update {
-                        it.copy(
-                            notifications = notif.notifications,
-                            unreadCount = notif.unreadCount,
-                        )
+
+                if (kycLocked) {
+                    repo.fetchKyc().onSuccess { k ->
+                        _state.update {
+                            it.copy(
+                                kycStatus = k.kycStatus,
+                                kycLevel = k.kycLevel,
+                                kycDocs = k.documents,
+                                kycLoaded = true,
+                            )
+                        }
+                        if (k.kycStatus == "APPROVED") {
+                            showBanner("KYC aprovado! Acesso ao sistema liberado.")
+                            refreshAll()
+                        }
+                    }
+                } else {
+                    repo.fetchNotifications().onSuccess { notif ->
+                        handleIncomingNotifications(notif)
+                        _state.update {
+                            it.copy(
+                                notifications = notif.notifications,
+                                unreadCount = notif.unreadCount,
+                            )
+                        }
                     }
                 }
             }
@@ -320,26 +356,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshAll() {
         viewModelScope.launch {
             _state.update { it.copy(loadingData = true) }
-            val period = _state.value.selectedPeriod
-            val sumDef = async { repo.fetchDashboardSummary() }
-            val walDef = async { repo.fetchWallets() }
-            val statDef = async { repo.fetchStatistic(period) }
-            val salesDef = async { repo.fetchRecentSales() }
-            val txDef = async { repo.fetchTransactions(100) }
-            val notifDef = async { repo.fetchNotifications() }
             val profDef = async { repo.fetchProfile() }
-            val benDef = async { repo.fetchBeneficiaries() }
-            val intDef = async { repo.fetchIntegrations(reveal = false) }
+            val kycDef = async { repo.fetchKyc() }
+            val notifDef = async { repo.fetchNotifications() }
 
-            val sum = sumDef.await().getOrNull()
-            val wal = walDef.await().getOrNull()
-            val stat = statDef.await().getOrNull()
-            val sales = salesDef.await().getOrNull()?.sales
-            val txs = txDef.await().getOrNull()?.transactions
-            val notif = notifDef.await().getOrNull()
             val prof = profDef.await().getOrNull()
-            val bens = benDef.await().getOrNull()?.beneficiaries
-            val integ = intDef.await().getOrNull()
+            val kyc = kycDef.await().getOrNull()
+            val notif = notifDef.await().getOrNull()
 
             if (notif != null) {
                 handleIncomingNotifications(notif)
@@ -352,10 +375,60 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+            val effectiveRole = prof?.role ?: _state.value.userRole
+            val effectiveKycStatus = kyc?.kycStatus ?: prof?.profile?.kycStatus ?: _state.value.kycStatus
+            val effectiveKycLevel = kyc?.kycLevel ?: prof?.profile?.kycLevel ?: _state.value.kycLevel
+            val isAdmin = effectiveRole == "ADMIN" || effectiveRole == "SUPER_ADMIN"
+            val unlocked = isAdmin || effectiveKycStatus == "APPROVED"
+
+            if (!unlocked) {
+                _state.update { cur ->
+                    cur.copy(
+                        loadingData = false,
+                        locale = prof?.locale?.let { PagwaveLocale.fromCode(it) } ?: cur.locale,
+                        profileEmail = prof?.email?.takeIf { it.isNotBlank() } ?: cur.profileEmail,
+                        userRole = effectiveRole,
+                        kycStatus = effectiveKycStatus,
+                        kycLevel = effectiveKycLevel,
+                        kycDocs = kyc?.documents ?: cur.kycDocs,
+                        kycLoaded = kyc != null || prof != null || cur.kycLoaded,
+                        twoFactorEnabled = prof?.twoFactorEnabled ?: cur.twoFactorEnabled,
+                        emailVerified = prof?.emailVerified ?: cur.emailVerified,
+                        profile = prof?.profile ?: cur.profile,
+                        preferences = prof?.preferences ?: cur.preferences,
+                        notifications = notif?.notifications ?: cur.notifications,
+                        unreadCount = notif?.unreadCount ?: cur.unreadCount,
+                    )
+                }
+                return@launch
+            }
+
+            val period = _state.value.selectedPeriod
+            val sumDef = async { repo.fetchDashboardSummary() }
+            val walDef = async { repo.fetchWallets() }
+            val statDef = async { repo.fetchStatistic(period) }
+            val salesDef = async { repo.fetchRecentSales() }
+            val txDef = async { repo.fetchTransactions(100) }
+            val benDef = async { repo.fetchBeneficiaries() }
+            val intDef = async { repo.fetchIntegrations(reveal = false) }
+
+            val sum = sumDef.await().getOrNull()
+            val wal = walDef.await().getOrNull()
+            val stat = statDef.await().getOrNull()
+            val sales = salesDef.await().getOrNull()?.sales
+            val txs = txDef.await().getOrNull()?.transactions
+            val bens = benDef.await().getOrNull()?.beneficiaries
+            val integ = intDef.await().getOrNull()
+
             _state.update { cur ->
                 cur.copy(
                     loadingData = false,
                     locale = prof?.locale?.let { PagwaveLocale.fromCode(it) } ?: cur.locale,
+                    userRole = effectiveRole,
+                    kycStatus = effectiveKycStatus,
+                    kycLevel = effectiveKycLevel,
+                    kycDocs = kyc?.documents ?: cur.kycDocs,
+                    kycLoaded = true,
                     summary = sum ?: cur.summary,
                     wallets = wal ?: cur.wallets,
                     statistic = stat ?: cur.statistic,
@@ -372,6 +445,73 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     integrations = integ ?: cur.integrations,
                 )
             }
+        }
+    }
+
+    fun submitKyc(docType: String, documentNumber: String, uri: Uri) {
+        viewModelScope.launch {
+            _state.update { it.copy(kycBusy = true) }
+            val prepared = runCatching {
+                val cr = app.contentResolver
+                val mime = cr.getType(uri) ?: "image/jpeg"
+                val name = cr.query(uri, null, null, null, null)?.use { c ->
+                    val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (c.moveToFirst() && idx >= 0) c.getString(idx) else null
+                } ?: if (mime == "application/pdf") "kyc-document.pdf" else "kyc-document.jpg"
+
+                val rawBytes = cr.openInputStream(uri)?.use { it.readBytes() }
+                    ?: error("Não foi possível ler o arquivo selecionado.")
+
+                if (mime == "application/pdf" || name.endsWith(".pdf", ignoreCase = true)) {
+                    require(rawBytes.size <= 3_200_000) { "O PDF deve ter no máximo 3 MB." }
+                    Triple(name, "application/pdf", rawBytes)
+                } else {
+                    val bmp = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)
+                        ?: error("Formato de imagem inválido.")
+                    val maxEdge = 1600f
+                    val scale = minOf(1f, maxEdge / maxOf(bmp.width, bmp.height).toFloat())
+                    val target = if (scale < 1f) {
+                        Bitmap.createScaledBitmap(
+                            bmp,
+                            (bmp.width * scale).toInt().coerceAtLeast(1),
+                            (bmp.height * scale).toInt().coerceAtLeast(1),
+                            true,
+                        )
+                    } else {
+                        bmp
+                    }
+                    val out = ByteArrayOutputStream()
+                    target.compress(Bitmap.CompressFormat.JPEG, 84, out)
+                    val jpgBytes = out.toByteArray()
+                    val safeName = name.replace(Regex("\\.[^.]+$"), "") + ".jpg"
+                    Triple(safeName, "image/jpeg", jpgBytes)
+                }
+            }
+
+            prepared.fold(
+                onSuccess = { (fileName, mimeType, bytes) ->
+                    repo.uploadKyc(docType, fileName, mimeType, bytes, documentNumber).fold(
+                        onSuccess = { res ->
+                            _state.update { cur ->
+                                cur.copy(
+                                    kycBusy = false,
+                                    kycStatus = "PENDING",
+                                    kycDocs = listOfNotNull(res.document) + cur.kycDocs,
+                                )
+                            }
+                            showBanner("KYC enviado para análise! Aguarde a aprovação do administrador.")
+                        },
+                        onFailure = { err ->
+                            _state.update { it.copy(kycBusy = false) }
+                            showBanner(err.message ?: "Falha ao enviar documento KYC.", isError = true)
+                        },
+                    )
+                },
+                onFailure = { err ->
+                    _state.update { it.copy(kycBusy = false) }
+                    showBanner(err.message ?: "Arquivo inválido.", isError = true)
+                },
+            )
         }
     }
 

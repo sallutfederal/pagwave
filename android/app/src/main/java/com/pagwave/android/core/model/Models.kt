@@ -83,11 +83,36 @@ data class NotificationPreferencesDto(
 data class ProfileResponse(
     val ok: Boolean = false,
     val email: String = "",
+    val role: String = "USER",
     val locale: String? = null,
     val twoFactorEnabled: Boolean = false,
     val emailVerified: Boolean = false,
     val profile: UserProfileDto? = null,
     val preferences: NotificationPreferencesDto? = null,
+)
+
+@Serializable
+data class KycDocumentDto(
+    val id: String = "",
+    val type: String = "",
+    val status: String = "PENDING",
+    val fileUrl: String = "",
+    val fileName: String? = null,
+    val reviewNote: String? = null,
+    val createdAt: String = "",
+)
+
+@Serializable
+data class KycStatusResponse(
+    val kycStatus: String = "NOT_STARTED",
+    val kycLevel: Int = 0,
+    val documents: List<KycDocumentDto> = emptyList(),
+)
+
+@Serializable
+data class KycUploadResponse(
+    val document: KycDocumentDto? = null,
+    val message: String? = null,
 )
 
 @Serializable

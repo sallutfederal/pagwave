@@ -3,7 +3,7 @@ import { randomInt } from "node:crypto";
 import { z } from "zod";
 
 import { prisma } from "../../config/database.js";
-import { authGuard } from "../../middleware/auth.js";
+import { kycApprovedGuard } from "../../middleware/auth.js";
 import { BadRequestError, NotFoundError } from "../../lib/errors.js";
 
 const createCardSchema = z.object({
@@ -29,7 +29,7 @@ const updateCardSchema = z.object({
 });
 
 export async function cardRoutes(app: FastifyInstance) {
-  app.addHook("preHandler", authGuard);
+  app.addHook("preHandler", kycApprovedGuard);
 
   // ─── GET /cards ────────────────────────────────────────────────────────
   app.get("/", async (request) => {

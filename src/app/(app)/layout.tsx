@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 
+import { KycGateModal } from "@/components/auth/kyc-gate-modal";
 import { VerifyEmailBanner } from "@/components/auth/verify-email-banner";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -23,6 +24,24 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   await connection();
   const user = await getCurrentUser();
   const dir = isRtlLocale(user.locale) ? "rtl" : "ltr";
+  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
+  const kycLocked = !isAdmin && user.kycStatus !== "APPROVED";
+
+  if (kycLocked) {
+    return (
+      <SessionProvider user={user}>
+        <LocaleProvider key={user.id} initialLocale={user.locale}>
+          <div dir={dir}>
+            <KycGateModal
+              email={user.email}
+              initialStatus={user.kycStatus}
+              initialLevel={user.kycLevel}
+            />
+          </div>
+        </LocaleProvider>
+      </SessionProvider>
+    );
+  }
 
   return (
     <SessionProvider user={user}>

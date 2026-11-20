@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 
-import { authGuard } from "../../middleware/auth.js";
+import { kycApprovedGuard } from "../../middleware/auth.js";
 import {
   createWalletSchema,
   depositSchema,
@@ -20,7 +20,7 @@ import {
 
 export async function walletRoutes(app: FastifyInstance) {
   // All wallet routes require auth
-  app.addHook("preHandler", authGuard);
+  app.addHook("preHandler", kycApprovedGuard);
 
   // ─── GET /wallets ──────────────────────────────────────────────────────
   app.get("/", async (request) => {

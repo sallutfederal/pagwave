@@ -125,6 +125,55 @@ fun PagwaveApp(viewModel: AppViewModel) {
                     )
                 }
 
+                !state.kycLoaded -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(c.background),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            PagwaveLogoMark(size = 56.dp)
+                            CircularProgressIndicator(
+                                color = c.brandGold,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    }
+                }
+
+                state.userRole !in listOf("ADMIN", "SUPER_ADMIN") && state.kycStatus != "APPROVED" -> {
+                    Scaffold(
+                        containerColor = c.background,
+                        snackbarHost = {
+                            SnackbarHost(hostState = snackbarHostState) { data ->
+                                Snackbar(
+                                    snackbarData = data,
+                                    containerColor = if (state.bannerIsError) c.danger else c.surface,
+                                    contentColor = if (state.bannerIsError) Color.White else c.foreground,
+                                    shape = RoundedCornerShape(16.dp),
+                                )
+                            }
+                        },
+                    ) { pad ->
+                        Box(modifier = Modifier.padding(pad)) {
+                            KycGateScreen(
+                                state = state,
+                                strings = strings,
+                                onSubmitKyc = viewModel::submitKyc,
+                                onRefreshStatus = viewModel::refreshAll,
+                                onToggleTheme = viewModel::toggleTheme,
+                                onSelectLocale = viewModel::setLocale,
+                                onLogout = viewModel::logout,
+                            )
+                        }
+                    }
+                }
+
                 else -> {
                     var currentTab by remember { mutableStateOf(MainTab.DASHBOARD) }
                     var walletInitialTab by remember { mutableStateOf(WalletTab.DEPOSIT) }

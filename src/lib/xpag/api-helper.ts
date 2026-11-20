@@ -13,6 +13,14 @@ export async function xpagPrivateJson(
 ) {
   try {
     const user = await getCurrentUser();
+    const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
+    if (!isAdmin && user.kycStatus !== "APPROVED") {
+      throw new XPagError(
+        "Acesso bloqueado: envie seus documentos de KYC e aguarde a aprovação do administrador.",
+        403,
+        "KYC_REQUIRED",
+      );
+    }
     const data = await produce(user.id);
     return Response.json(data, { status: init.status ?? 200, headers: PRIVATE_HEADERS });
   } catch (error) {
