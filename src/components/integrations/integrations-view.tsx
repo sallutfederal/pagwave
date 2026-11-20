@@ -2,25 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
-import { Check, Copy, Eye, EyeOff, KeyRound, Play, RefreshCw, Save, Webhook } from "lucide-react";
+import { Check, Copy, Eye, EyeOff, KeyRound, RefreshCw, Save, Webhook } from "lucide-react";
 import { useI18n } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { CurrencyBadge } from "@/components/wallet/currency-badge";
-import { DynamicFields } from "@/components/wallet/dynamic-fields";
-import {
-  CURRENCY_SPECS,
-  XPAG_CURRENCIES,
-  type XPagCurrency,
-} from "@/lib/xpag/currencies";
 import { cn } from "@/lib/utils";
 
 type CredentialData = {
@@ -96,14 +82,6 @@ export function IntegrationsView() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [rotating, setRotating] = useState(false);
   const [configNotice, setConfigNotice] = useState<string | null>(null);
-
-  // Live API test state
-  const [testCurrency, setTestCurrency] = useState<XPagCurrency>("BRL");
-  const [testAmount, setTestAmount] = useState("100");
-  const [testPayer, setTestPayer] = useState<Record<string, string>>({});
-  const [testingCall, setTestingCall] = useState(false);
-  const [testError, setTestError] = useState<string | null>(null);
-  const [testResponse, setTestResponse] = useState<Record<string, unknown> | null>(null);
 
   const [refreshTick, setRefreshTick] = useState(0);
   const baseOrigin = useSyncExternalStore(
@@ -223,53 +201,6 @@ export function IntegrationsView() {
     }
   };
 
-  const handleRunLiveApiTest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!credential) return;
-    setTestError(null);
-    setTestResponse(null);
-    setTestingCall(true);
-    try {
-      const secret = await fetchRevealedSecret();
-      if (!secret) {
-        setTestError("Não foi possível obter o Client Secret para autenticar a chamada.");
-        return;
-      }
-
-      const amount = Number(testAmount.replace(",", "."));
-      const body: Record<string, unknown> = {
-        currency: testCurrency,
-        ...(Number.isFinite(amount) && amount > 0 ? { amount } : {}),
-        description: "Teste ao vivo via Integrações Pagwave",
-        ...testPayer,
-      };
-
-      const res = await fetch("/api/v1/cashin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Client-Id": credential.clientId,
-          "X-Client-Secret": secret,
-        },
-        body: JSON.stringify(body),
-      });
-      const json = (await res.json()) as Record<string, unknown>;
-      if (!res.ok || json.ok === false) {
-        setTestError(
-          String(json.message || "Erro na autenticação ou validação da cobrança."),
-        );
-      }
-      setTestResponse(json);
-      setRefreshTick((t) => t + 1);
-    } catch {
-      setTestError("Falha de rede ao executar chamada na API /api/v1/cashin.");
-    } finally {
-      setTestingCall(false);
-    }
-  };
-
-  const testSpec = CURRENCY_SPECS[testCurrency];
-
   return (
     <div className="space-y-6">
       {errorMsg ? (
@@ -278,9 +209,8 @@ export function IntegrationsView() {
         </Card>
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-12">
-        {/* Credentials Card */}
-        <Card className="space-y-5 p-5 sm:p-6 xl:col-span-7">
+      {/* Credentials Card */}
+      <Card className="space-y-5 p-5 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div className="flex items-center gap-2.5">
               <span className="bg-accent-soft text-accent grid size-9 place-items-center rounded-xl">
@@ -424,88 +354,6 @@ export function IntegrationsView() {
           </form>
         </Card>
 
-        {/* Live Gateway Test Card */}
-        <Card className="space-y-4 p-5 sm:p-6 xl:col-span-5">
-          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
-            <div>
-              <h3 className="text-foreground text-sm font-semibold">
-                Testar Fluxo Real (/api/v1/cashin)
-              </h3>
-              <p className="text-muted-foreground text-xs">
-                Autentica sua key acima e solicita cobrança na moeda escolhida.
-              </p>
-            </div>
-            <CurrencyBadge currency={testCurrency} showNetwork={false} />
-          </div>
-
-          <form onSubmit={handleRunLiveApiTest} className="space-y-3.5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                  Moeda
-                </label>
-                <Select
-                  value={testCurrency}
-                  onValueChange={(v) => {
-                    setTestCurrency(v as XPagCurrency);
-                    setTestPayer({});
-                    setTestError(null);
-                  }}
-                >
-                  <SelectTrigger className="bg-surface-subtle border-line text-foreground h-10 w-full rounded-xl px-3 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {XPAG_CURRENCIES.map((code) => (
-                      <SelectItem key={code} value={code}>
-                        {code} — {CURRENCY_SPECS[code].countryName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="text-muted-foreground mb-1.5 block text-xs font-medium">
-                  Valor ({testCurrency})
-                </label>
-                <Input
-                  value={testAmount}
-                  onChange={(e) => setTestAmount(e.target.value)}
-                  placeholder={testSpec.supportsOpenValueCashin ? "Ex.: 100 ou vazio (estático)" : "100"}
-                  className="bg-surface-subtle border-line text-foreground h-10 rounded-xl font-mono text-xs"
-                />
-              </div>
-            </div>
-
-            <DynamicFields
-              fields={testSpec.cashinPayerFields}
-              values={testPayer}
-              onChange={(k, v) => setTestPayer((prev) => ({ ...prev, [k]: v }))}
-            />
-
-            {testError ? (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                {testError}
-              </div>
-            ) : null}
-
-            <Button type="submit" disabled={testingCall || !credential} className="w-full">
-              <Play className="size-3.5" />
-              {testingCall
-                ? "Autenticando chave e gerando cobrança..."
-                : `Executar POST /api/v1/cashin (${testCurrency})`}
-            </Button>
-          </form>
-
-          {testResponse ? (
-            <pre className="text-foreground max-h-64 overflow-auto rounded-xl bg-black/40 p-3 font-mono text-[11px]">
-              {JSON.stringify(testResponse, null, 2)}
-            </pre>
-          ) : null}
-        </Card>
-      </div>
-
       {/* Request Logs Table */}
       <Card className="space-y-4 p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -530,7 +378,7 @@ export function IntegrationsView() {
 
         {logs.length === 0 ? (
           <p className="text-muted-foreground py-6 text-center text-xs">
-            Nenhuma chamada registrada ainda. Execute o teste ao vivo acima ou integre seguindo{" "}
+            Nenhuma chamada registrada ainda. Integre suas aplicações seguindo{" "}
             <Link href="/docs" target="_blank" rel="noopener noreferrer" className="text-accent underline">
               /docs
             </Link>
