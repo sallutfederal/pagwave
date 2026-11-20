@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { CurrencyBadge } from "@/components/wallet/currency-badge";
+import { CurrencyIcon } from "@/components/wallet/currency-badge";
 import { XPAG_CURRENCIES, type XPagCurrency } from "@/lib/xpag/currencies";
 import { cn } from "@/lib/utils";
 
@@ -564,7 +564,7 @@ export function AdminFeesView() {
 
   if (loading && !payload) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <Card className="h-24 animate-pulse" />
         <Card className="h-96 animate-pulse" />
       </div>
@@ -575,27 +575,27 @@ export function AdminFeesView() {
     <div className="space-y-6">
       {/* KPI strip */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="p-4">
-          <p className="text-xs text-white/55">Usuários na Plataforma</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+        <Card className="p-5">
+          <p className="text-muted-foreground text-xs">Usuários na Plataforma</p>
+          <p className="text-foreground mt-1.5 text-2xl font-semibold tabular-nums">
             {payload?.userOverrides.length ?? 0}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-white/55">Com Taxa Personalizada</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-400">
+        <Card className="p-5">
+          <p className="text-muted-foreground text-xs">Com Taxa Personalizada</p>
+          <p className="text-success mt-1.5 text-2xl font-semibold tabular-nums">
             {customUsersCount}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-white/55">Regras Globais (FeeConfig)</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
+        <Card className="p-5">
+          <p className="text-muted-foreground text-xs">Regras Globais (FeeConfig)</p>
+          <p className="text-foreground mt-1.5 text-2xl font-semibold tabular-nums">
             {payload?.fees.length ?? 0}
           </p>
         </Card>
-        <Card className="p-4">
-          <p className="text-xs text-white/55">Fallback Cash-in (bps)</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-[#e2be72]">
+        <Card className="p-5">
+          <p className="text-muted-foreground text-xs">Fallback Cash-in (bps)</p>
+          <p className="text-accent mt-1.5 text-2xl font-semibold tabular-nums">
             {payload ? `${(payload.platformFeeBps / 100).toFixed(2)}%` : "0.90%"}
           </p>
         </Card>
@@ -603,15 +603,15 @@ export function AdminFeesView() {
 
       {/* Mode Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1">
+        <div className="border-line bg-surface-subtle inline-flex rounded-xl border p-1">
           <button
             type="button"
             onClick={() => setActiveTab("user-fees")}
             className={cn(
               "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-medium transition-colors",
               activeTab === "user-fees"
-                ? "bg-[#e2be72] text-[#090a0e]"
-                : "text-white/65 hover:text-white",
+                ? "bg-accent text-accent-fg shadow-xs"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <UserCog className="size-3.5" />
@@ -623,8 +623,8 @@ export function AdminFeesView() {
             className={cn(
               "flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-medium transition-colors",
               activeTab === "global-fees"
-                ? "bg-[#e2be72] text-[#090a0e]"
-                : "text-white/65 hover:text-white",
+                ? "bg-accent text-accent-fg shadow-xs"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Sliders className="size-3.5" />
@@ -639,20 +639,20 @@ export function AdminFeesView() {
           onClick={() => void loadData()}
           disabled={loading}
         >
-          <RefreshCw className={cn("mr-1.5 size-3.5", loading && "animate-spin")} />
+          <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
           Atualizar
         </Button>
       </div>
 
       {notice ? (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-300">
+        <div className="border-success/30 bg-success-soft text-success flex items-center gap-2 rounded-xl border px-4 py-3 text-xs font-medium">
           <Check className="size-4 shrink-0" />
           <span>{notice}</span>
         </div>
       ) : null}
 
       {errorMsg ? (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-xs text-red-300">
+        <div className="border-danger/30 bg-danger-soft text-danger rounded-xl border px-4 py-3 text-xs font-medium">
           {errorMsg}
         </div>
       ) : null}
@@ -660,10 +660,10 @@ export function AdminFeesView() {
       {activeTab === "user-fees" ? (
         <div className="grid gap-5 lg:grid-cols-[330px_1fr]">
           {/* Left: User Selector List */}
-          <Card className="flex flex-col overflow-hidden p-4">
+          <Card className="flex flex-col overflow-hidden p-4 sm:p-5">
             <div className="space-y-3">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-white/40" />
+                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2" />
                 <Input
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
@@ -673,7 +673,7 @@ export function AdminFeesView() {
               </div>
 
               <div className="flex items-center justify-between gap-2 text-xs">
-                <span className="text-white/60">Somente personalizadas</span>
+                <span className="text-muted-foreground">Somente personalizadas</span>
                 <Switch
                   label="Filtrar somente usuários com taxa personalizada"
                   checked={onlyCustomFilter}
@@ -682,9 +682,9 @@ export function AdminFeesView() {
               </div>
             </div>
 
-            <div className="mt-3 max-h-[540px] space-y-1.5 overflow-y-auto pr-1">
+            <div className="mt-4 max-h-[540px] space-y-2 overflow-y-auto pr-1">
               {filteredUsers.length === 0 ? (
-                <p className="py-8 text-center text-xs text-white/45">
+                <p className="text-muted-foreground py-8 text-center text-xs">
                   Nenhum usuário encontrado.
                 </p>
               ) : (
@@ -699,16 +699,16 @@ export function AdminFeesView() {
                       className={cn(
                         "flex w-full items-start justify-between gap-2 rounded-xl border p-3 text-left transition-colors",
                         selected
-                          ? "border-[#e2be72]/60 bg-[#e2be72]/10"
-                          : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05]",
+                          ? "border-accent/50 bg-accent-soft"
+                          : "border-line bg-surface-subtle hover:bg-surface-hover",
                       )}
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-xs font-semibold text-white">
+                        <p className="text-foreground truncate text-xs font-semibold">
                           {u.name}
                         </p>
-                        <p className="truncate text-[11px] text-white/55">{u.email}</p>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        <p className="text-muted-foreground truncate text-[11px]">{u.email}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
                           {u.role !== "USER" ? (
                             <Badge tone="accent" className="text-[10px]">
                               {u.role}
@@ -737,16 +737,16 @@ export function AdminFeesView() {
           {/* Right: Editor for Selected User */}
           {selectedUser ? (
             <div className="space-y-5">
-              <Card className="p-5">
-                <div className="flex flex-col gap-3 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <Card className="p-5 sm:p-6">
+                <div className="border-line flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <Shield className="size-4 text-[#e2be72]" />
-                      <h3 className="text-sm font-semibold text-white">
+                      <Shield className="text-accent size-4" />
+                      <h3 className="text-foreground text-sm font-semibold">
                         {selectedUser.name}
                       </h3>
                     </div>
-                    <p className="mt-0.5 text-xs text-white/55">{selectedUser.email}</p>
+                    <p className="text-muted-foreground mt-0.5 text-xs">{selectedUser.email}</p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -757,7 +757,7 @@ export function AdminFeesView() {
                       onClick={handleResetUserRules}
                       disabled={savingUser || selectedUser.rules.length === 0}
                     >
-                      <RotateCcw className="mr-1.5 size-3.5" />
+                      <RotateCcw className="size-3.5" />
                       Restaurar padrão
                     </Button>
                     <Button
@@ -766,7 +766,7 @@ export function AdminFeesView() {
                       onClick={handleSaveUserRules}
                       disabled={savingUser}
                     >
-                      <Save className="mr-1.5 size-3.5" />
+                      <Save className="size-3.5" />
                       {savingUser ? "Salvando..." : "Salvar Taxas do Usuário"}
                     </Button>
                   </div>
@@ -775,10 +775,10 @@ export function AdminFeesView() {
                 {/* Currency Scope Selector */}
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-xs font-medium text-white">
+                    <p className="text-foreground text-xs font-medium">
                       Escopo da moeda para editar abaixo
                     </p>
-                    <p className="text-[11px] text-white/50">
+                    <p className="text-muted-foreground mt-0.5 text-[11px]">
                       Use <strong>Todas as moedas (*)</strong> como taxa geral da conta ou
                       personalize por moeda específica (ex: <strong>BRL</strong> para Pix Out).
                     </p>
@@ -826,44 +826,46 @@ export function AdminFeesView() {
                         className={cn(
                           "rounded-xl border p-4",
                           op.isWithdrawal
-                            ? "border-[#e2be72]/40 bg-[#e2be72]/[0.04]"
-                            : "border-white/10 bg-white/[0.02]",
+                            ? "border-accent/40 bg-accent-soft/35"
+                            : "border-line bg-surface-subtle",
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <Icon
                               className={cn(
-                                "size-4",
-                                op.isWithdrawal ? "text-[#e2be72]" : "text-white/70",
+                                "size-4 shrink-0",
+                                op.isWithdrawal ? "text-accent" : "text-muted-foreground",
                               )}
                             />
                             <div>
                               <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-semibold text-white">
+                                <span className="text-foreground text-xs font-semibold">
                                   {op.label}
                                 </span>
                                 {op.isWithdrawal ? (
-                                  <Badge className="bg-[#e2be72]/20 text-[10px] text-[#e2be72]">
+                                  <Badge tone="accent" className="text-[10px]">
                                     Saque
                                   </Badge>
                                 ) : null}
                               </div>
-                              <p className="text-[11px] text-white/50">{op.hint}</p>
+                              <p className="text-muted-foreground text-[11px]">{op.hint}</p>
                             </div>
                           </div>
 
                           <Badge
                             tone={hasInWorking ? "success" : "neutral"}
-                            className="text-[10px]"
+                            className="shrink-0 text-[10px]"
                           >
                             {hasInWorking ? "Personalizada" : "Padrão"}
                           </Badge>
                         </div>
 
-                        <div className="mt-3 grid grid-cols-2 gap-2.5">
-                          <div>
-                            <label className="text-[11px] text-white/60">Taxa (%)</label>
+                        <div className="mt-3.5 grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground block text-[11px]">
+                              Taxa (%)
+                            </label>
                             <Input
                               type="number"
                               min="0"
@@ -875,8 +877,8 @@ export function AdminFeesView() {
                               }
                             />
                           </div>
-                          <div>
-                            <label className="text-[11px] text-white/60">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground block text-[11px]">
                               Taxa Fixa ({userScopeCurrency === "*" ? "moeda" : userScopeCurrency})
                             </label>
                             <Input
@@ -889,8 +891,10 @@ export function AdminFeesView() {
                               }
                             />
                           </div>
-                          <div>
-                            <label className="text-[11px] text-white/60">Mínimo</label>
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground block text-[11px]">
+                              Mínimo
+                            </label>
                             <Input
                               type="number"
                               min="0"
@@ -901,8 +905,8 @@ export function AdminFeesView() {
                               }
                             />
                           </div>
-                          <div>
-                            <label className="text-[11px] text-white/60">
+                          <div className="space-y-1">
+                            <label className="text-muted-foreground block text-[11px]">
                               Máximo (opcional)
                             </label>
                             <Input
@@ -918,8 +922,8 @@ export function AdminFeesView() {
                           </div>
                         </div>
 
-                        <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
-                          <label className="flex items-center gap-2 text-white/70">
+                        <div className="mt-3.5 flex items-center justify-between gap-2 text-[11px]">
+                          <label className="text-foreground/80 flex items-center gap-2">
                             <Switch
                               label={`Cobrar taxa para ${op.label}`}
                               checked={draft.isActive}
@@ -929,12 +933,12 @@ export function AdminFeesView() {
                             />
                             <span>{draft.isActive ? "Cobrar taxa" : "Isento (0%)"}</span>
                           </label>
-                          <span className="font-mono text-white/55">
+                          <span className="text-muted-foreground font-mono">
                             Ex. 1.000 → Taxa {sampleFee.toFixed(2)}
                           </span>
                         </div>
 
-                        <div className="mt-3 flex items-center gap-2">
+                        <div className="mt-3.5 flex items-center gap-2">
                           <Button
                             type="button"
                             size="sm"
@@ -942,7 +946,7 @@ export function AdminFeesView() {
                             className="flex-1 text-xs"
                             onClick={() => applyDraftToWorkingRules(op.type)}
                           >
-                            <Percent className="mr-1.5 size-3.5" />
+                            <Percent className="size-3.5" />
                             {hasInWorking ? "Atualizar no rascunho" : "Personalizar regra"}
                           </Button>
                           {hasInWorking ? (
@@ -955,7 +959,7 @@ export function AdminFeesView() {
                               }
                               title="Remover esta regra personalizada"
                             >
-                              <Trash2 className="size-3.5 text-red-400" />
+                              <Trash2 className="text-danger size-3.5" />
                             </Button>
                           ) : null}
                         </div>
@@ -965,18 +969,18 @@ export function AdminFeesView() {
                 </div>
 
                 {/* Working Rules Summary */}
-                <div className="mt-5 space-y-3 border-t border-white/[0.07] pt-4">
+                <div className="border-line mt-5 space-y-3 border-t pt-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-xs font-semibold text-white">
+                    <h4 className="text-foreground text-xs font-semibold">
                       Regras personalizadas no rascunho ({workingUserRules.length})
                     </h4>
-                    <span className="text-[11px] text-white/50">
+                    <span className="text-muted-foreground text-[11px]">
                       Lembre-se de clicar em &ldquo;Salvar Taxas do Usuário&rdquo; após editar.
                     </span>
                   </div>
 
                   {workingUserRules.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-white/10 p-3 text-xs text-white/50">
+                    <p className="border-line text-muted-foreground rounded-lg border border-dashed p-3.5 text-xs">
                       Este usuário utiliza 100% as taxas padrão da plataforma. Clique em
                       &ldquo;Personalizar regra&rdquo; em qualquer card acima para definir
                       taxas exclusivas (como taxa de saque).
@@ -988,15 +992,15 @@ export function AdminFeesView() {
                         return (
                           <div
                             key={`${r.transactionType}:${r.currencyCode}`}
-                            className="flex items-center gap-2 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs"
+                            className="border-line bg-surface-subtle flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs"
                           >
-                            <span className="font-semibold text-white">
+                            <span className="text-foreground font-semibold">
                               {opMeta?.label ?? r.transactionType}
                             </span>
                             <Badge tone="accent" className="text-[10px]">
                               {r.currencyCode === "*" ? "Todas (*)" : r.currencyCode}
                             </Badge>
-                            <span className="font-mono text-emerald-300">
+                            <span className="text-success font-mono font-medium">
                               {r.isActive
                                 ? `${(r.percentFee * 100).toFixed(2)}% + ${r.flatFee}`
                                 : "Isento (0%)"}
@@ -1006,7 +1010,7 @@ export function AdminFeesView() {
                               onClick={() =>
                                 removeWorkingRule(r.transactionType, r.currencyCode)
                               }
-                              className="ml-1 text-white/45 hover:text-red-400"
+                              className="text-muted-foreground hover:text-danger ml-1"
                               aria-label="Remover regra"
                             >
                               <Trash2 className="size-3.5" />
@@ -1017,12 +1021,11 @@ export function AdminFeesView() {
                     </div>
                   )}
 
-                  <div className="pt-2">
-                    <label className="text-xs font-medium text-white/70">
+                  <div className="space-y-1.5 pt-2">
+                    <label className="text-muted-foreground block text-xs font-medium">
                       Observação comercial (exibida para o usuário em /fees)
                     </label>
                     <Input
-                      className="mt-1.5"
                       value={userNote}
                       onChange={(e) => setUserNote(e.target.value)}
                       placeholder="Ex: Plano Enterprise · Saque Pix reduzido para 0,5%"
@@ -1036,18 +1039,18 @@ export function AdminFeesView() {
         </div>
       ) : (
         /* Global FeeConfig Tab */
-        <Card className="p-5">
-          <div className="flex flex-col gap-4 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="space-y-5 p-5 sm:p-6">
+          <div className="border-line flex flex-col gap-4 border-b pb-5">
             <div>
-              <h3 className="text-sm font-semibold text-white">
+              <h3 className="text-foreground text-sm font-semibold">
                 Taxas Padrão por Moeda (FeeConfig Global)
               </h3>
-              <p className="text-xs text-white/55">
+              <p className="text-muted-foreground mt-0.5 text-xs">
                 Aplicadas a todos os usuários que não possuem regra personalizada naquela operação.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               {[...currencies, "*"].map((code) => {
                 const active = code === globalCurrency;
                 return (
@@ -1056,14 +1059,17 @@ export function AdminFeesView() {
                     type="button"
                     onClick={() => changeGlobalCurrency(code)}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
                       active
-                        ? "border-[#e2be72]/60 bg-[#e2be72]/15 text-white"
-                        : "border-white/10 bg-white/[0.02] text-white/60 hover:bg-white/[0.06] hover:text-white",
+                        ? "border-accent/50 bg-accent-soft text-foreground shadow-xs"
+                        : "border-line bg-surface-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                     )}
                   >
                     {isXPagCurrency(code) ? (
-                      <CurrencyBadge currency={code} className="size-4" />
+                      <CurrencyIcon
+                        currency={code}
+                        className="size-6 rounded-lg border-0 bg-transparent shadow-none"
+                      />
                     ) : null}
                     <span>{code === "*" ? "Global (*)" : code}</span>
                   </button>
@@ -1072,7 +1078,7 @@ export function AdminFeesView() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {OPERATIONS.map((op) => {
               const Icon = op.icon;
               const draft = globalDrafts[op.type];
@@ -1089,23 +1095,23 @@ export function AdminFeesView() {
                   className={cn(
                     "rounded-xl border p-4",
                     op.isWithdrawal
-                      ? "border-[#e2be72]/35 bg-[#e2be72]/[0.04]"
-                      : "border-white/10 bg-white/[0.02]",
+                      ? "border-accent/40 bg-accent-soft/35"
+                      : "border-line bg-surface-subtle",
                   )}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <Icon
                         className={cn(
-                          "size-4",
-                          op.isWithdrawal ? "text-[#e2be72]" : "text-white/75",
+                          "size-4 shrink-0",
+                          op.isWithdrawal ? "text-accent" : "text-muted-foreground",
                         )}
                       />
                       <div>
-                        <h4 className="text-xs font-semibold text-white">
+                        <h4 className="text-foreground text-xs font-semibold">
                           {op.label} · {globalCurrency === "*" ? "Global (*)" : globalCurrency}
                         </h4>
-                        <p className="text-[11px] text-white/50">{op.hint}</p>
+                        <p className="text-muted-foreground text-[11px]">{op.hint}</p>
                       </div>
                     </div>
                     <Badge tone={hasSavedRow ? "success" : "neutral"} className="text-[10px]">
@@ -1113,9 +1119,9 @@ export function AdminFeesView() {
                     </Badge>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[11px] text-white/60">Taxa (%)</label>
+                  <div className="mt-3.5 grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground block text-[11px]">Taxa (%)</label>
                       <Input
                         type="number"
                         min="0"
@@ -1130,8 +1136,10 @@ export function AdminFeesView() {
                         }
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] text-white/60">Taxa Fixa</label>
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground block text-[11px]">
+                        Taxa Fixa
+                      </label>
                       <Input
                         type="number"
                         min="0"
@@ -1145,8 +1153,8 @@ export function AdminFeesView() {
                         }
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] text-white/60">Mínimo</label>
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground block text-[11px]">Mínimo</label>
                       <Input
                         type="number"
                         min="0"
@@ -1160,8 +1168,10 @@ export function AdminFeesView() {
                         }
                       />
                     </div>
-                    <div>
-                      <label className="text-[11px] text-white/60">Máximo (opcional)</label>
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground block text-[11px]">
+                        Máximo (opcional)
+                      </label>
                       <Input
                         type="number"
                         min="0"
@@ -1178,8 +1188,8 @@ export function AdminFeesView() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-2">
-                    <label className="flex items-center gap-2 text-xs text-white/70">
+                  <div className="mt-3.5 flex items-center justify-between gap-2">
+                    <label className="text-foreground/80 flex items-center gap-2 text-xs">
                       <Switch
                         label={`Ativar regra global para ${op.label}`}
                         checked={draft.isActive}
@@ -1199,7 +1209,7 @@ export function AdminFeesView() {
                       disabled={isSaving}
                       onClick={() => void handleSaveGlobalRule(op.type)}
                     >
-                      <Save className="mr-1.5 size-3.5" />
+                      <Save className="size-3.5" />
                       {isSaving ? "Salvando..." : "Salvar Padrão"}
                     </Button>
                   </div>

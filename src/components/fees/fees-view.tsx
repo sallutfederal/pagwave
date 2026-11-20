@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CurrencyBadge } from "@/components/wallet/currency-badge";
+import { CurrencyIcon } from "@/components/wallet/currency-badge";
 import { XPAG_CURRENCIES, type XPagCurrency } from "@/lib/xpag/currencies";
 import { cn } from "@/lib/utils";
 
@@ -229,13 +229,13 @@ export function FeesView() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Card className="h-24 animate-pulse" />
+      <div className="space-y-6">
+        <Card className="h-32 animate-pulse" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card className="h-44 animate-pulse" />
-          <Card className="h-44 animate-pulse" />
-          <Card className="h-44 animate-pulse" />
-          <Card className="h-44 animate-pulse" />
+          <Card className="h-48 animate-pulse" />
+          <Card className="h-48 animate-pulse" />
+          <Card className="h-48 animate-pulse" />
+          <Card className="h-48 animate-pulse" />
         </div>
       </div>
     );
@@ -244,22 +244,22 @@ export function FeesView() {
   if (errorMsg) {
     return (
       <Card className="p-6">
-        <p className="text-sm text-red-400">{errorMsg}</p>
+        <p className="text-danger text-sm">{errorMsg}</p>
       </Card>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Top Status Banner */}
-      <Card className="flex flex-col gap-4 border-white/10 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
+      {/* Top Status Banner + Currency Switcher */}
+      <Card className="space-y-5 p-5 sm:p-6">
+        <div className="flex items-start gap-3.5">
           <div
             className={cn(
               "mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border",
               data?.hasCustomFees
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                : "border-white/10 bg-white/[0.04] text-[#e2be72]",
+                ? "border-success/30 bg-success-soft text-success"
+                : "border-line bg-accent-soft text-accent",
             )}
           >
             {data?.hasCustomFees ? (
@@ -268,55 +268,60 @@ export function FeesView() {
               <Percent className="size-5" />
             )}
           </div>
-          <div>
+          <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-sm font-semibold text-white">
+              <h2 className="text-foreground text-sm font-semibold sm:text-base">
                 {data?.hasCustomFees
                   ? "Condição Comercial Personalizada Ativa"
                   : "Tabela Padrão PagWave Ativa"}
               </h2>
-              <Badge
-                tone={data?.hasCustomFees ? "success" : "neutral"}
-                className="text-[11px]"
-              >
+              <Badge tone={data?.hasCustomFees ? "success" : "neutral"}>
                 {data?.hasCustomFees ? "Personalizada" : "Padrão"}
               </Badge>
             </div>
-            <p className="mt-1 text-xs text-white/60">
+            <p className="text-muted-foreground text-xs leading-relaxed sm:text-sm">
               {data?.hasCustomFees
                 ? data.customNote
-                  ? `Observação da mesa: ${data.customNote}`
+                  ? `Observação comercial: ${data.customNote}`
                   : "Sua conta possui regras personalizadas definidas pelo administrador e aplicadas automaticamente nas movimentações."
-                : `As taxas abaixo são aplicadas automaticamente em suas operações de saque, depósito, P2P e câmbio.`}
+                : "As taxas abaixo são aplicadas automaticamente nas suas operações de saque, depósito, transferências P2P e câmbio."}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
-          {currencies.map((c) => {
-            const active = c.code === selectedCurrency;
-            return (
-              <button
-                key={c.code}
-                type="button"
-                onClick={() => {
-                  setSelectedCurrency(c.code);
-                  setSimCurrency(c.code);
-                }}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  active
-                    ? "border-[#e2be72]/60 bg-[#e2be72]/15 text-white"
-                    : "border-white/10 bg-white/[0.02] text-white/60 hover:bg-white/[0.06] hover:text-white",
-                )}
-              >
-                {isXPagCurrency(c.code) ? (
-                  <CurrencyBadge currency={c.code} className="size-4" />
-                ) : null}
-                <span>{c.code}</span>
-              </button>
-            );
-          })}
+        <div className="border-line border-t pt-4">
+          <p className="text-muted-foreground mb-2.5 text-[11px] font-medium uppercase tracking-wider">
+            Selecione a moeda para visualizar
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {currencies.map((c) => {
+              const active = c.code === selectedCurrency;
+              return (
+                <button
+                  key={c.code}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCurrency(c.code);
+                    setSimCurrency(c.code);
+                  }}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors",
+                    active
+                      ? "border-accent/50 bg-accent-soft text-foreground shadow-xs"
+                      : "border-line bg-surface-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                  )}
+                >
+                  {isXPagCurrency(c.code) ? (
+                    <CurrencyIcon
+                      currency={c.code}
+                      className="size-6 rounded-lg border-0 bg-transparent shadow-none"
+                    />
+                  ) : null}
+                  <span>{c.code}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </Card>
 
@@ -337,75 +342,75 @@ export function FeesView() {
               key={op}
               className={cn(
                 "flex flex-col justify-between p-5 transition-colors",
-                meta.highlight
-                  ? "border-[#e2be72]/35 bg-[#e2be72]/[0.04]"
-                  : "border-white/10",
+                meta.highlight ? "border-accent/40 bg-accent-soft/35" : "",
               )}
             >
-              <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
                     <div
                       className={cn(
-                        "flex size-8 items-center justify-center rounded-lg border",
+                        "flex size-9 shrink-0 items-center justify-center rounded-xl border",
                         meta.highlight
-                          ? "border-[#e2be72]/30 bg-[#e2be72]/15 text-[#e2be72]"
-                          : "border-white/10 bg-white/[0.04] text-white/75",
+                          ? "border-accent/35 bg-accent-soft text-accent"
+                          : "border-line bg-surface-subtle text-muted-foreground",
                       )}
                     >
                       <Icon className="size-4" />
                     </div>
-                    <div>
-                      <h3 className="text-sm font-semibold text-white">{meta.label}</h3>
-                      <p className="text-[11px] text-white/45">{selectedCurrency}</p>
+                    <div className="min-w-0">
+                      <h3 className="text-foreground text-sm font-semibold">{meta.label}</h3>
+                      <p className="text-muted-foreground text-[11px]">{selectedCurrency}</p>
                     </div>
                   </div>
-                  <Badge tone={isCustom ? "success" : "neutral"} className="text-[10px]">
+                  <Badge tone={isCustom ? "success" : "neutral"} className="shrink-0">
                     {isCustom ? "Personalizada" : "Padrão"}
                   </Badge>
                 </div>
 
-                <div className="mt-4">
+                <div>
                   <p
                     className={cn(
-                      "text-xl font-semibold tabular-nums",
-                      isFree ? "text-emerald-400" : "text-white",
+                      "text-xl font-semibold tabular-nums tracking-tight",
+                      isFree ? "text-success" : "text-foreground",
                     )}
                   >
                     {rule ? renderRuleFormula(rule) : "Isento (0,00%)"}
                   </p>
-                  <p className="mt-1 text-xs text-white/55">{meta.description}</p>
+                  <p className="text-muted-foreground mt-1.5 text-xs leading-relaxed">
+                    {meta.description}
+                  </p>
                 </div>
               </div>
 
               {rule ? (
-                <div className="mt-4 space-y-1 border-t border-white/[0.07] pt-3 text-[11px] text-white/55">
-                  <div className="flex items-center justify-between">
+                <div className="border-line text-muted-foreground mt-5 space-y-1.5 border-t pt-3.5 text-[11px]">
+                  <div className="flex items-center justify-between gap-2">
                     <span>Percentual</span>
-                    <span className="font-mono text-white/85">
+                    <span className="text-foreground font-mono font-medium">
                       {rule.isActive ? formatPercent(rule.percentFee) : "0,00% (isento)"}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span>Taxa fixa</span>
-                    <span className="font-mono text-white/85">
+                    <span className="text-foreground font-mono font-medium">
                       {rule.isActive
                         ? formatCurrencyValue(rule.flatFee, rule.currencyCode)
                         : formatCurrencyValue(0, rule.currencyCode)}
                     </span>
                   </div>
                   {rule.minFee > 0 ? (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span>Taxa mínima</span>
-                      <span className="font-mono text-white/85">
+                      <span className="text-foreground font-mono font-medium">
                         {formatCurrencyValue(rule.minFee, rule.currencyCode)}
                       </span>
                     </div>
                   ) : null}
                   {rule.maxFee !== null && rule.maxFee > 0 ? (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span>Teto máximo</span>
-                      <span className="font-mono text-white/85">
+                      <span className="text-foreground font-mono font-medium">
                         {formatCurrencyValue(rule.maxFee, rule.currencyCode)}
                       </span>
                     </div>
@@ -418,22 +423,24 @@ export function FeesView() {
       </div>
 
       {/* Interactive Fee Simulator */}
-      <Card className="p-5">
-        <div className="mb-4 flex items-center gap-2.5">
-          <Calculator className="size-4 text-[#e2be72]" />
+      <Card className="space-y-5 p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="border-line bg-surface-subtle text-accent flex size-9 shrink-0 items-center justify-center rounded-xl border">
+            <Calculator className="size-4" />
+          </div>
           <div>
-            <h3 className="text-sm font-semibold text-white">
+            <h3 className="text-foreground text-sm font-semibold">
               Simulador de Taxa &amp; Valor Líquido
             </h3>
-            <p className="text-xs text-white/55">
-              Veja exatamente quanto será cobrado e quanto será enviado/recebido antes de operar.
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Veja exatamente quanto será cobrado e quanto será enviado ou recebido antes de operar.
             </p>
           </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-white/70">Operação</label>
+            <label className="text-muted-foreground block text-xs font-medium">Operação</label>
             <Select
               value={simOp}
               onValueChange={(v) => setSimOp(v as FeeTransactionType)}
@@ -452,7 +459,7 @@ export function FeesView() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-white/70">Moeda</label>
+            <label className="text-muted-foreground block text-xs font-medium">Moeda</label>
             <Select value={simCurrency} onValueChange={setSimCurrency}>
               <SelectTrigger>
                 <SelectValue />
@@ -468,7 +475,7 @@ export function FeesView() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-white/70">
+            <label className="text-muted-foreground block text-xs font-medium">
               Valor bruto ({simCurrency})
             </label>
             <Input
@@ -482,30 +489,30 @@ export function FeesView() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-3">
+        <div className="border-line bg-surface-subtle grid gap-4 rounded-xl border p-4 sm:grid-cols-3">
           <div>
-            <p className="text-[11px] text-white/50">Valor Bruto</p>
-            <p className="mt-1 text-base font-semibold tabular-nums text-white">
+            <p className="text-muted-foreground text-[11px]">Valor Bruto</p>
+            <p className="text-foreground mt-1 text-base font-semibold tabular-nums">
               {formatCurrencyValue(simNumericAmount, simCurrency)}
             </p>
           </div>
           <div>
-            <p className="text-[11px] text-white/50">
+            <p className="text-muted-foreground text-[11px]">
               Taxa Aplicada ({simRule?.source === "USER_CUSTOM" ? "Personalizada" : "Padrão"})
             </p>
-            <p className="mt-1 text-base font-semibold tabular-nums text-amber-300">
+            <p className="text-warning mt-1 text-base font-semibold tabular-nums">
               {formatCurrencyValue(simResult.fee, simCurrency)}
             </p>
           </div>
           <div>
-            <p className="text-[11px] text-white/50">
+            <p className="text-muted-foreground text-[11px]">
               {simOp === "WITHDRAWAL"
                 ? "Valor Líquido Enviado no Saque"
                 : simOp === "DEPOSIT"
                   ? "Crédito Líquido na Carteira"
                   : "Valor Líquido Efetivo"}
             </p>
-            <p className="mt-1 flex items-center gap-1.5 text-base font-semibold tabular-nums text-emerald-400">
+            <p className="text-success mt-1 flex items-center gap-1.5 text-base font-semibold tabular-nums">
               <CheckCircle2 className="size-4 shrink-0" />
               <span>{formatCurrencyValue(simResult.netAmount, simCurrency)}</span>
             </p>
@@ -515,12 +522,12 @@ export function FeesView() {
 
       {/* Complete Matrix Table */}
       <Card className="overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-white/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="border-line flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
           <div>
-            <h3 className="text-sm font-semibold text-white">
+            <h3 className="text-foreground text-sm font-semibold">
               Tabela Completa por Moeda e Operação
             </h3>
-            <p className="text-xs text-white/55">
+            <p className="text-muted-foreground mt-0.5 text-xs">
               Todas as taxas efetivas vigentes na sua conta agora.
             </p>
           </div>
@@ -531,10 +538,10 @@ export function FeesView() {
                 type="button"
                 onClick={() => setTableFilterOp(op)}
                 className={cn(
-                  "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
                   tableFilterOp === op
-                    ? "border-white/25 bg-white/10 text-white"
-                    : "border-white/10 text-white/55 hover:bg-white/[0.04] hover:text-white",
+                    ? "border-accent/50 bg-accent-soft text-foreground"
+                    : "border-line bg-surface-subtle text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                 )}
               >
                 {op === "ALL" ? "Todas" : OPERATION_META[op].shortLabel}
@@ -545,17 +552,17 @@ export function FeesView() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[680px] text-left text-xs">
-            <thead className="border-b border-white/[0.07] bg-white/[0.02] text-white/55">
+            <thead className="border-line bg-surface-subtle text-muted-foreground border-b">
               <tr>
-                <th className="px-4 py-3 font-medium">Moeda</th>
-                <th className="px-4 py-3 font-medium">Operação</th>
-                <th className="px-4 py-3 font-medium">Taxa (%)</th>
-                <th className="px-4 py-3 font-medium">Taxa Fixa</th>
-                <th className="px-4 py-3 font-medium">Mín / Máx</th>
-                <th className="px-4 py-3 font-medium">Origem</th>
+                <th className="px-5 py-3.5 font-medium">Moeda</th>
+                <th className="px-5 py-3.5 font-medium">Operação</th>
+                <th className="px-5 py-3.5 font-medium">Taxa (%)</th>
+                <th className="px-5 py-3.5 font-medium">Taxa Fixa</th>
+                <th className="px-5 py-3.5 font-medium">Mín / Máx</th>
+                <th className="px-5 py-3.5 font-medium">Origem</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.06]">
+            <tbody className="divide-line divide-y">
               {filteredRows.map((rule) => {
                 const isCustom = rule.source === "USER_CUSTOM";
                 const isWaived =
@@ -565,32 +572,35 @@ export function FeesView() {
                 return (
                   <tr
                     key={`${rule.currencyCode}:${rule.transactionType}`}
-                    className="hover:bg-white/[0.02]"
+                    className="hover:bg-surface-subtle/60 transition-colors"
                   >
-                    <td className="px-4 py-3 font-medium text-white">
-                      <div className="flex items-center gap-2">
+                    <td className="text-foreground px-5 py-3.5 font-medium">
+                      <div className="flex items-center gap-2.5">
                         {isXPagCurrency(rule.currencyCode) ? (
-                          <CurrencyBadge currency={rule.currencyCode} className="size-4" />
+                          <CurrencyIcon
+                            currency={rule.currencyCode}
+                            className="size-6 rounded-lg border-0 bg-transparent shadow-none"
+                          />
                         ) : null}
-                        <span>{rule.currencyCode}</span>
+                        <span className="font-semibold">{rule.currencyCode}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-white/85">
+                    <td className="text-foreground/90 px-5 py-3.5">
                       {OPERATION_META[rule.transactionType].label}
                     </td>
-                    <td className="px-4 py-3 font-mono tabular-nums text-white">
+                    <td className="text-foreground px-5 py-3.5 font-mono tabular-nums">
                       {isWaived ? (
-                        <span className="text-emerald-400">0,00%</span>
+                        <span className="text-success font-medium">0,00%</span>
                       ) : (
                         formatPercent(rule.percentFee)
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono tabular-nums text-white/80">
+                    <td className="text-muted-foreground px-5 py-3.5 font-mono tabular-nums">
                       {rule.isActive
                         ? formatCurrencyValue(rule.flatFee, rule.currencyCode)
                         : formatCurrencyValue(0, rule.currencyCode)}
                     </td>
-                    <td className="px-4 py-3 font-mono tabular-nums text-white/60">
+                    <td className="text-muted-foreground px-5 py-3.5 font-mono tabular-nums">
                       {rule.minFee > 0 || (rule.maxFee !== null && rule.maxFee > 0)
                         ? `${rule.minFee > 0 ? `Mín ${formatCurrencyValue(rule.minFee, rule.currencyCode)}` : "—"} / ${
                             rule.maxFee !== null && rule.maxFee > 0
@@ -599,8 +609,8 @@ export function FeesView() {
                           }`
                         : "—"}
                     </td>
-                    <td className="px-4 py-3">
-                      <Badge tone={isCustom ? "success" : "neutral"} className="text-[10px]">
+                    <td className="px-5 py-3.5">
+                      <Badge tone={isCustom ? "success" : "neutral"}>
                         {isCustom
                           ? rule.customScope === "GLOBAL"
                             ? "Personalizada (Global)"
